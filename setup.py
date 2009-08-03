@@ -31,7 +31,7 @@ CLASSIFIERS = [
 ]
 
 #  Module Lists
-PACKAGES = ["extprot"]
+PACKAGES = ["extprot","extprot.tests"]
 EXT_MODULES = []
 PKG_DATA = {}
 
