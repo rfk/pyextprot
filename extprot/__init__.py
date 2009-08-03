@@ -35,7 +35,7 @@ standard syntax and idioms.  If the above protocol is recorded in the file
         ...
     ValueError: not a valid String: 7
     >>> print repr(p1.to_string())
-    '\x01\x1f\x03\x00\x02\x03\x05Guido\x05\x13\x01\x03\x10guido@python.org'
+    '\\x01\\x1f\\x03\\x00\\x02\\x03\\x05Guido\\x05\\x13\\x01\\x03\\x10guido@python.org'
     >>> print person.from_string(p1.to_string()).name
     'Guido'
     >>>
