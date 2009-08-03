@@ -1,7 +1,8 @@
-
+#
+#  Pythonization of the "address_book" example from extprot
+#
 
 from extprot import types
-from extprot.stream import StringStream
 
 _unbound_types = tuple(types.Unbound() for _ in xrange(1))
 class optional(types.Union):
@@ -33,6 +34,8 @@ class address_book(types.Message):
 
 
 def test():
+    from extprot.stream import StringStream
+
     assert len(person._types) == 4
     assert len(optional._types) == 2
     assert issubclass(person._types[2]._types[0],optional)
@@ -66,5 +69,4 @@ def test():
 
 if __name__ == "__main__":
     test()
-
 

@@ -1,3 +1,6 @@
+#
+#  Pythonization of the "tst" example from extprot
+#
 
 from extprot import types
 from extprot.stream import StringStream
