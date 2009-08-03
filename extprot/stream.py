@@ -1,6 +1,6 @@
 """
 
-  extproc.stream:  classes for working with extprot bytestreams
+  extprot:  classes for working with extprot bytestreams
 
 """
 

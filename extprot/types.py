@@ -175,11 +175,17 @@ class Int(Type):
     @classmethod
     def from_stream(cls,stream):
         n = stream.read_Vint()
-        return (n >> 1) ^ -(n & 1)
+        if n % 2 == 0:
+            return n // 2
+        else:
+            return n // -2
 
     @classmethod
     def to_stream(cls,value,stream):
-        stream.write_Vint((value << 1) | (value >> 63))
+        if value >= 0:
+            stream.write_Vint(value*2)
+        else:
+            stream.write_Vint(value*-2 - 1)
 
 
 class Long(Type):
@@ -392,7 +398,7 @@ class _UnionMetaclass(type):
 
     This metaclass is responsible for populating Union._type with a tuple
     of the declared option types, and Union._option_from_prefix to a mapping
-    from extproc encoded prefixes to individual Option classes.
+    from extprot encoded prefixes to individual Option classes.
     """
 
     def __new__(mcls,name,bases,attrs):
