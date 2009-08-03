@@ -1,5 +1,6 @@
 
 from extprot import types
+from extprot.stream import StringStream
 
 class id(types.Int):
     pass
@@ -58,4 +59,48 @@ class doc(types.Union):
     class Simple(types.Message):
         simple_id = types.Field(id)
         simple_name = types.Field(types.String)
+
+
+def test():
+
+    md1 = metadata(author=meta.Unset,pages=meta.Unset)
+    md2 = metadata(author=meta.Unset,pages=meta.Set(source.One,7))
+    md3 = metadata(meta.Set(source.Some_other(),"Ryan"),meta.Unset)
+    md4 = metadata(md3.author,meta.Set(source.One,2578982))
+    for md in (md1,md2,md3,md4):
+        s = StringStream()
+        md.to_stream(s)
+        s.reset()
+        assert md == metadata.from_stream(s)
+
+    doc1 = doc.Simple(7,"hello")
+    doc2 = doc.Normal(7892,dim.A(3),"hello2",md1)
+    assert doc2.dim[0] == 3
+    doc3 = doc.Normal(42,dim.B(3.14159265),"testing extprot",md4)
+    assert doc3.dim[0] == 3.14159265
+    doc4 = doc.Normal(512,dim.D(85),"testing extprot",md3)
+    assert doc4.dim[0] == 85
+    doc5 = doc.Normal(512,dim.C(7.1,42,["hi","there"],(92.0,[True,],[])),"testing extprot",md2)
+    assert doc5.dim[0] == 7.1
+    assert doc5.dim[1] == 42
+    assert " ".join(doc5.dim[2]) == "hi there"
+    assert doc5.dim[3][0] == 92.0
+    assert not doc5.dim[3][2]
+    doc5.dim[3][2].append(["ateststring"])
+    assert len(doc5.dim[3][2]) == 1
+    try:
+        doc5.dim[3][2].append(7)
+    except ValueError:
+        pass
+    else:
+        assert False, "added int to a List(List(String))"
+    for d in (doc1,doc2,doc3,doc4,doc5):
+        s = StringStream()
+        d.to_stream(s)
+        s.reset()
+        assert d == doc.from_stream(s)
+
+
+if __name__ == "__main__":
+    test()
 

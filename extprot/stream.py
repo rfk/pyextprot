@@ -279,4 +279,7 @@ class StringStream(Stream):
     def getstring(self):
         return self.stream.getvalue()
 
+    def reset(self):
+        self.stream.seek(0)
+
 

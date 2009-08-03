@@ -208,7 +208,10 @@ class Float(Type):
     @classmethod
     def convert(cls,value):
         # TODO: a better way to convert/check float types?
-        return struct.unpack("<d",struct.pack("<d",value))
+        try:
+            return struct.unpack("<d",struct.pack("<d",value))[0]
+        except struct.error:
+            raise ValueError("not a Float")
 
     @classmethod
     def from_stream(cls,stream):
@@ -251,7 +254,8 @@ class Tuple(Type):
 
     @classmethod
     def convert(cls,value):
-        return tuple(cls._convert_types(value))
+        values = tuple(cls._convert_types(value))
+        return values
 
     @classmethod
     def default(cls):
@@ -331,7 +335,10 @@ class _List(Type):
 
     @classmethod
     def convert(cls,value):
-        return _TypedList(cls._types[0], value)
+        try:
+            return _TypedList(cls._types[0], value)
+        except TypeError:
+            raise ValueError("not a valid List")
 
     @classmethod
     def default(cls):
@@ -478,7 +485,7 @@ class Option(Type):
             return Type.__new__(cls)
 
     def __init__(self,*values):
-        self._values = values
+        self._values = tuple(self._convert_types(values))
 
     def __getitem__(self,index):
         return self._values[index]
@@ -505,7 +512,7 @@ class Option(Type):
                 raise ValueError("not this Option type")
             if unify_types(cls._types,value.__class__._types) is None:
                 raise ValueError("not this Option type")
-            return cls(*cls._convert_types(value._values))
+            return cls(*value._values)
         if _issubclass(value,Option):
             if value._types:
                 raise ValueError("no data given to non-constant Option")
@@ -515,25 +522,24 @@ class Option(Type):
                 raise ValueError("not this Option type")
             return cls
         #  Not an Option class or instance, must be a direct value tuple
-        return cls(*cls._convert_types(value))
+        return cls(*value)
 
     @classmethod
-    def from_stream(cls,stream,types=None):
-        # We assume the prefix has already been read by the enclosing Union
-        if types is None:
-            types = cls._types
+    def from_stream(cls,stream,prefix=None):
+        if prefix is None:
+            prefix = stream.read_prefix()
         # Nothing to read for Enum options
-        if not types:
+        if not cls._types:
             return cls
         stream.read_int() # length is ignored
         nelems = stream.read_int()
         values = []
-        for t in types[:nelems]:
+        for t in cls._types[:nelems]:
             values.append(t.from_stream(stream))
-        for t in types[nelems:]:
+        for t in cls._types[nelems:]:
             stream.skip_value()
             values.append(t.default())
-        return cls(*cls._convert_types(values,types))
+        return cls(*cls._convert_types(values))
 
     @classmethod
     def to_stream(cls,value,stream,types=None):
@@ -629,6 +635,10 @@ class Message(Type):
 
     __metaclass__ = _MessageMetaclass
 
+    #  Messages can be part of a Union, giving them a specific index.
+    #  Stand-alone messaged always have index of zero.
+    _index = 0
+
     def __init__(self,*args,**kwds):
         self._initialized = False
         #  Process positional and keyword arguments as Field values
@@ -646,8 +656,7 @@ class Message(Type):
         if kwds:
             raise TypeError("too many keyword arguments to Message")
         self._initialized = True
-        #  Allow calling to_stream() on instances.
-        # TODO: do this on Union type as well, if it contains messages
+        #  Allow calling to_stream() on Message instances.
         def my_to_stream(stream):
             self.__class__.to_stream(self,stream)
         self.to_stream = my_to_stream
@@ -671,8 +680,9 @@ class Message(Type):
         return cls()
 
     @classmethod
-    def from_stream(cls,stream):
-        prefix = stream.read_prefix(stream.TYPE_TUPLE)
+    def from_stream(cls,stream,prefix=None):
+        if prefix is None:
+            prefix = stream.read_prefix(stream.TYPE_TUPLE)
         stream.read_int()  # length is ignored
         nelems = stream.read_int()
         values = []
@@ -686,7 +696,7 @@ class Message(Type):
     @classmethod
     def to_stream(cls,value,stream):
         values = ((t.to_stream,t.__get__(value)) for t in cls._types)
-        stream.write_Tuple(0,values)
+        stream.write_Tuple(value._index,values)
 
     def __eq__(self,msg):
         if self.__class__ != msg.__class__:
@@ -757,7 +767,7 @@ class Union(Type):
             opt = cls._option_from_prefix[prefix]
         except KeyError:
             raise ParseError("not a Union type")
-        return opt.from_stream(stream)
+        return opt.from_stream(stream,prefix=prefix)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -767,14 +777,10 @@ class Union(Type):
 class Unbound(Type):
     """Unbound type, for representing type parameters.
 
-    All of the methods of this type raise errors.  Its intended use is for
-    individual instances to represent types that are not yet bound in a 
-    polymorphic type declaration (i.e. to appear in cls._unbound_types).
+    Attempts to use this clas in serialization raise errors.  Its intended
+    use is for individual instances to represent types that are not yet bound
+    in polymorphic type declaration (i.e. to appear in cls._unbound_types).
     """
-
-    @classmethod
-    def convert(self,value):
-        raise TypeError("parametric type not bound")
 
     @classmethod
     def from_stream(self,stream):

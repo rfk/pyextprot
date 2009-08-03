@@ -1,6 +1,7 @@
 
 
 from extprot import types
+from extprot.stream import StringStream
 
 _unbound_types = tuple(types.Unbound() for _ in xrange(1))
 class optional(types.Union):
@@ -49,7 +50,6 @@ def test():
     assert p3.email is optional.Unset
     assert p3.phones == []
  
-    from extprot.stream import StringStream
     s = StringStream()
     p3.to_stream(s)
     assert p3 == person.from_stream(StringStream(s.getstring()))
