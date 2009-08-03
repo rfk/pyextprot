@@ -2,6 +2,15 @@
 
   extprot:  classes for working with extprot bytestreams
 
+
+This module implements the low-level details of reading and writing extprot
+bytestreams.  The class 'Stream' wraps a readable/writable file-like object
+and provides methods such as read_Vint, write_Vint, etc for working with 
+the primitive types of the extprot encoding.
+
+The class StringStream is a simple shortcut to wrap a Stream around a
+StringIO object.
+
 """
 
 import struct
@@ -50,8 +59,8 @@ class Stream(object):
 
         If there are no more values, EOFError will be raised.
         """
-        #  For efficiency's sake we dispatch on the value of the wire_type.
-        #  You could replace this with a big if-elif-else chain.
+        #  For efficiency's sake we dispatch on the value of the wire_type
+        #  rather than using a big if-elif chain.
         try:
             prefix = self.read_prefix()
         except UnexpectedEOFError:
@@ -264,10 +273,16 @@ class Stream(object):
     )
 
     def skip_value(self):
+        # TODO: skip using length markers
         self.read_value()
 
 
 class StringStream(Stream):
+    """Simple Stream subclass that wraps a StringIO instance.
+
+    The method getstring() returns the current string value of the stream,
+    while reset() will position the stream back at position zero.
+    """
 
     def __init__(self,string=None):
         if string is not None:

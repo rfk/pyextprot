@@ -6,7 +6,7 @@ This module defines classes and functions used to compose the in-memory
 object structure corresponding to an extprot protocol.  They essentially
 form a class-based reification of the extprot type system.  Type definitions
 are represented by various subclasses of 'Type', while messages are subclasses
-of the specia. type 'Message'.
+of the special type 'Message'.
 
 It's possible to directly compose these primitives into a protocol description
 such as the following:
@@ -21,7 +21,7 @@ such as the following:
       name = Field(String)
       emails = Field(Tuple.build(String,List.build(String)))
  
-However, it's probably more reliable to use the 'parser' module to generate
+However, it's probably more reliable to use the 'compiler' module to generate
 this object structure automatically from a .proto souce file.
 
 """
@@ -111,6 +111,11 @@ class Type(object):
     def to_stream(cls,value,stream):
         """Write a value fo this type to an extprot bytestream."""
         raise NotImplementedError
+
+    @classmethod
+    def from_string(cls,string):
+        s = StringStream(string)
+        return cls.from_stream(s)
 
     def __eq__(self,other):
         return self is other

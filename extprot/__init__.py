@@ -68,7 +68,6 @@ __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,
 
 
 from extprot.errors import *
-from extprot import compiler
 
 
 def import_protocol(filename,namespace):
@@ -79,7 +78,8 @@ def import_protocol(filename,namespace):
     For now this is the only way to compile a protocol file; soon support
     will be added for writing the compiled classes out to a Python file.
     """
-    nsc = compiler.NamespaceCompiler()
+    from extprot.compiler import NamespaceCompiler
+    nsc = NamespaceCompiler()
     nsc.compile(filename)
     for (n,v) in nsc.namespace.iteritems():
         namespace[n] = v 
@@ -91,7 +91,8 @@ def import_protocol_string(string,namespace):
     This function dynamically compiles the protocol definitions found in
     the string 'string' and loads the resulting objects into 'namespace'.
     """
-    nsc = compiler.NamespaceCompiler()
+    from extprot.compiler import NamespaceCompiler
+    nsc = NamespaceCompiler()
     nsc.compile_string(string)
     for (n,v) in nsc.namespace.iteritems():
         namespace[n] = v 

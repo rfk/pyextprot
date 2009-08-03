@@ -1,3 +1,25 @@
+"""
+
+  extprot.compiler:  protocol description compiler for extprot
+
+This module provides the necessary infrastructure to compile the language-
+neutral extprot protocol description format into a the Python class structure
+defined by the extprot.types module.
+
+The only interesting thing currently in this module is the NamespaceCompiler
+class, which dynamically compiles the protocol definition into live class
+objects and stores them into a given namespace:
+
+    nsc = NamespaceCompiler(globals())
+    nsc.compile("mymessages.proto")
+    nsc.compile_string("message a_bool { v: bool; }")
+
+Eventually there will also be a ModuleCompiler class that compiles the protocol
+into a python module file; this will avoid the overhead of re-compiling on
+every program invocation, and will also allow the protocol to be used without
+the pyparsing package installed.
+
+"""
 
 from pyparsing import *
 
@@ -6,6 +28,12 @@ from extprot import types
 
 
 class BaseCompiler:
+    """Base compiler class for extprot protocol descriptions.
+
+    This class defines the structure of the extprot grammar and connects
+    up its various build_* methods as parser actions.  Subclasses should
+    override these methods to provide the appropriate behaviour.
+    """
 
     def __init__(self):
         self.grammar = self._make_grammar()
@@ -142,7 +170,7 @@ class NamespaceCompiler(BaseCompiler):
             return types.Float
         if type == "string":
             return types.String
-        return types.Unbound()
+        raise CompilerError("unrecognised primitive type: " + type)
 
     def build_tuple_type(self,instring,loc,tokenlist):
         return types.Tuple.build(*tokenlist)
