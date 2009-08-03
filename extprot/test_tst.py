@@ -64,7 +64,7 @@ class doc(types.Union):
         simple_name = types.Field(types.String)
 
 
-def test():
+def test_tst(metadata,meta,source,doc,dim,**extra):
 
     md1 = metadata(author=meta.Unset,pages=meta.Unset)
     md2 = metadata(author=meta.Unset,pages=meta.Set(source.One,7))
@@ -105,5 +105,14 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
+    from os import path
+    #  test the hard-crafted translation
+    test_tst(**globals())
+    #  test the machine-generated transaltion
+    proto_file = path.join(path.dirname(__file__),"../../examples/tst.proto")
+    from extprot.compiler import NamespaceCompiler
+    nsc = NamespaceCompiler()
+    nsc.compile(open(proto_file))
+    test_tst(**nsc.namespace)
+
 

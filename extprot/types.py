@@ -790,6 +790,26 @@ class Unbound(Type):
     def to_stream(self,value,stream):
         raise TypeError("parametric type not bound")
 
+   
+class Placeholder(Type):
+    """Placeholder type, for representing not-yet-defined type names.
+
+    Attempts to use this clas in serialization raise errors.  Its intended
+    use is for parsing routines to use it as a placeholder for typenames that
+    haven't yet been defined.
+    """
+
+    def __init__(self,name):
+        self.name = name
+
+    @classmethod
+    def from_stream(self,stream):
+        raise TypeError("parametric type not bound")
+
+    @classmethod
+    def to_stream(self,value,stream):
+        raise TypeError("parametric type not bound")
+
 
 def bind(ptype,*ctypes):
     """Dynamically bind unbound type parameters to create a new type class.
@@ -909,4 +929,36 @@ def _unify_types_rec(type1,type2,pairs):
         if _unify_types_rec(t1,t2,pairs) is None:
             return None
     return pairs
+
+
+def resolve_placeholders(type):
+    """Iterator for resolving Placeholder() types.
+
+    This function is a generator produce (name,setter) pairs, where
+    'name' is the name from a Placeholder instance attached to the given
+    type object, and 'setter' is a function that should be called with the
+    resolved value for that placeholder.  Parsing code should drive it in
+    a loop like this:
+
+        for (name,setter) in resolve_placeholders(mytype):
+            setter(defined_names[name])
+ 
+    """
+    new_types = []
+    for t2 in type._types:
+        if isinstance(t2,Placeholder):
+            result = []
+            def setter(value):
+                result.append(value)
+            yield (t2.name,setter)
+            if result:
+                new_types.append(result[0])
+            else:
+                new_types.append(t2)
+        else:
+            for sub in resolve_placeholders(t2):
+                yield sub
+            new_types.append(t2)
+    type._types = tuple(new_types)
+ 
 

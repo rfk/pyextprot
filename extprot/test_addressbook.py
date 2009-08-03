@@ -33,7 +33,7 @@ class address_book(types.Message):
     persons = types.Field(types.List.build(person))
 
 
-def test():
+def test_address_book(optional,phone_type,person,address_book,**extra):
     from extprot.stream import StringStream
 
     assert len(person._types) == 4
@@ -52,7 +52,7 @@ def test():
     assert p3.name == "Aidan"
     assert p3.email is optional.Unset
     assert p3.phones == []
- 
+
     s = StringStream()
     p3.to_stream(s)
     assert p3 == person.from_stream(StringStream(s.getstring()))
@@ -67,6 +67,15 @@ def test():
     book2 = address_book.from_stream(StringStream(s.getstring()))
     assert book1 == book2
 
+
 if __name__ == "__main__":
-    test()
+    from os import path
+    #  test the hard-crafted translation
+    test_address_book(**globals())
+    #  test the machine-generated transaltion
+    proto_file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
+    from extprot.compiler import NamespaceCompiler
+    nsc = NamespaceCompiler()
+    nsc.compile(open(proto_file))
+    test_address_book(**nsc.namespace)
 
