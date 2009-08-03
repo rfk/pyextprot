@@ -51,18 +51,18 @@ def test():
  
     from extprot.stream import StringStream
     s = StringStream()
-    p3.to_extprot_stream(s)
-    assert p3 == person.from_extprot_stream(StringStream(s.getstring()))
+    p3.to_stream(s)
+    assert p3 == person.from_stream(StringStream(s.getstring()))
 
     s = StringStream()
-    p1.to_extprot_stream(s)
-    assert p1 == person.from_extprot_stream(StringStream(s.getstring()))
+    p1.to_stream(s)
+    assert p1 == person.from_stream(StringStream(s.getstring()))
 
-    #book1 = address_book([p1,p2,p3])
-    #s = StringStream()
-    #book1.to_extprot_stream(s)
-    #book2 = address_book.from_extprot_stream(StringStream(s.getstring()))
-    #assert book1 == book2
+    book1 = address_book([p1,p2,p3])
+    s = StringStream()
+    book1.to_stream(s)
+    book2 = address_book.from_stream(StringStream(s.getstring()))
+    assert book1 == book2
 
 if __name__ == "__main__":
     test()
