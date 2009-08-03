@@ -29,6 +29,7 @@ this object structure automatically from a .proto souce file.
 import struct
 
 from extprot.errors import *
+from extprot.stream import StringStream
 
 
 def _issubclass(cls,bases):
@@ -260,8 +261,11 @@ class Tuple(Type):
 
     @classmethod
     def convert(cls,value):
-        values = tuple(cls._convert_types(value))
-        return values
+        try:
+            values = iter(value)
+        except TypeError:
+            raise ValueError("not a valid Tuple")
+        return tuple(cls._convert_types(values))
 
     @classmethod
     def default(cls):
@@ -636,7 +640,6 @@ class Message(Type):
     """Composed message type.
 
     This is the basic unit of data transfer in extprot, and is basically
-    a mapping from attribute names to typed values.
     """
 
     __metaclass__ = _MessageMetaclass
@@ -703,6 +706,16 @@ class Message(Type):
     def to_stream(cls,value,stream):
         values = ((t.to_stream,t.__get__(value)) for t in cls._types)
         stream.write_Tuple(value._index,values)
+
+    def to_string(self):
+        s = StringStream()
+        self.to_stream(s)
+        return s.getstring()
+
+    @classmethod
+    def from_string(cls,string):
+        s = StringStream(string)
+        return cls.from_stream(s)
 
     def __eq__(self,msg):
         if self.__class__ != msg.__class__:

@@ -1,3 +1,4 @@
 
-* testcases for protocol extensions
+* testcases for protocol extensions (default values etc)
+* proper immutability of list-like types
 

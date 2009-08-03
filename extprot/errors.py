@@ -8,6 +8,10 @@ class Error(Exception):
     """Base class for all extprot-related errors."""
     pass
 
+class CompileError(Error):
+    """Error compiling a protocol definition."""
+    pass
+
 class ParseError(Error):
     """Error parsing a badly-formed byte stream."""
     pass

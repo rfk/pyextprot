@@ -4,9 +4,6 @@ from pyparsing import *
 from extprot.errors import *
 from extprot import types
 
-class CompileError(Error):
-    pass
-
 
 class BaseCompiler:
 
@@ -16,7 +13,7 @@ class BaseCompiler:
     def compile(self,stream):
         self.grammar.parseFile(stream)
 
-    def compileString(self,string):
+    def compile_string(self,string):
         self.grammar.parseString(string)
 
     def build_prim_type(self,instring,loc,tokenlist):
@@ -168,6 +165,7 @@ class NamespaceCompiler(BaseCompiler):
                     pass
                 Opt._types = tuple(opt_data[1:])
                 Opt.__name__ = opt_data[0]
+                Opt.__module__ = "<extprot.dynamic>"
                 locals()[opt_data[0]] = Opt
                 del Opt
             del opt_data
@@ -198,6 +196,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(type,pvar_map)
         type.__name__ = name
+        type.__module__ = "<extprot.dynamic>"
         self.namespace[name] = type
         return None
 
@@ -222,6 +221,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(Anon)
         Anon.__name__ = name
+        Anon.__module__ = "<extprot.dynamic>"
         self.namespace[name] = Anon
         return None
 
@@ -240,6 +240,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(Anon)
         Anon.__name__ = name
+        Anon.__module__ = "<extprot.dynamic>"
         self.namespace[name] = Anon
         return None
 

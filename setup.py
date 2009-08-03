@@ -5,7 +5,7 @@
 #  This script is placed in the public domain.
 #
 
-from distutils import setup
+from distutils.core import setup
 
 #  Import to allow pertinent info to be extracted
 import extprot
@@ -14,7 +14,7 @@ VERSION = extprot.__version__
 
 # Package MetaData
 NAME = "extprot"
-DESCRIPTION = "efficient binary serialization format for extensible protocols"
+DESCRIPTION = "compact, efficient, extensible binary serialization format"
 AUTHOR = "Ryan Kelly"
 AUTHOR_EMAIL = "ryan@rfk.id.au"
 URL = "http://github.com/rfk/extprot/tree/master"
