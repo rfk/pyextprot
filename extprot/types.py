@@ -177,7 +177,7 @@ class Int(Type):
 
     @classmethod 
     def convert(cls,value):
-        if not isinstance(value,int):
+        if not isinstance(value,(int,long)):
             raise ValueError("not a valid Int: " + repr(value))
         return value
 
