@@ -177,7 +177,9 @@ class Int(Type):
 
     @classmethod 
     def convert(cls,value):
-        return int(value)
+        if not isinstance(value,int):
+            raise ValueError("not a valid Int: " + repr(value))
+        return value
 
     @classmethod
     def from_stream(cls,stream):
@@ -496,7 +498,7 @@ class Option(Type):
         """
         if not cls._types:
             if values:
-                raise ValueError("values given to constant Option")
+                raise ValueError("values given to constant Option constructor")
             return cls
         else:
             return Type.__new__(cls)
@@ -525,19 +527,15 @@ class Option(Type):
         #  accept instances of any of our base classes, as long as they
         #  have a compatible type signature.
         if isinstance(value,Option):
-            if value.__class__ not in cls.__mro__:
-                raise ValueError("not this Option type")
-            if unify_types(cls._types,value.__class__._types) is None:
-                raise ValueError("not this Option type")
-            return cls(*value._values)
-        if _issubclass(value,Option):
+            if value.__class__ in cls.__mro__:
+                return cls(*value._values)
+            if unify_types(cls._types,value.__class__._types) is not None:
+                return cls(*value._values)
+        elif _issubclass(value,Option):
             if value._types:
                 raise ValueError("no data given to non-constant Option")
-            if value not in cls.__mro__:
-                raise ValueError("not this Option type")
-            if unify_types(cls._types,value._types) is None:
-                raise ValueError("not this Option type")
-            return cls
+            if not cls._types and value  in cls.__mro__:
+                return cls
         #  Not an Option class or instance, must be a direct value tuple.
         #  A scalar is converted into a tuple of length 1.
         try:
@@ -800,10 +798,11 @@ class Union(Type):
     def convert(cls,value):
         for t in cls._types:
             try:
-                return t.convert(value)
+                v = t.convert(value)
+                return v
             except ValueError, e:
                 pass
-        raise ValueError("could not convert Union type")
+        raise ValueError("could not convert value '" + repr(value) + "' to Union type '" + repr(cls) + "'")
 
     @classmethod
     def default(cls):

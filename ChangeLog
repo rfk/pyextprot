@@ -1,5 +1,11 @@
 
+0.1.1:
+
+    * allow Message instances to be pickled by serializing them.
+    * allow the Option constructor to provide default values
+    * prevent Int fields from silently truncating other numeric types
+
 0.1.0:
 
-    * Initial release
+    * Initial release.
 

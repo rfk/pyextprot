@@ -69,7 +69,8 @@ def make_cases(optional,phone_type,person,address_book,**extra):
             p2 = person("Lauren",2,optional.Unset,[("123456",phone_type.Home)])
             p3 = person("Aidan",3)
             book1 = address_book([p1,p2,p3])
-            assert book1 == address_book.from_string(book1.to_string())
+            book2 = address_book.from_string(book1.to_string())
+            assert book1 == book2
 
     return TestAddressBook
 
