@@ -648,12 +648,13 @@ class Message(Type):
     """Composed message type.
 
     This is the basic unit of data transfer in extprot, and is basically
+    a set of typed key-value pairs.
     """
 
     __metaclass__ = _MessageMetaclass
 
     #  Messages can be part of a Union, giving them a specific index.
-    #  Stand-alone messaged always have index of zero.
+    #  Stand-alone messaged always have an index of zero.
     _index = 0
 
     def __init__(self,*args,**kwds):
@@ -732,6 +733,16 @@ class Message(Type):
             if t.__get__(self) != t.__get__(msg):
                 return False
         return True
+
+    def __reduce__(self):
+        """Pickle Messages by serializing them."""
+        return (_unpickle_message,(self.__class__,self.to_string()))
+
+
+def _unpickle_message(cls,data):
+    """Helper function for unpickled of Message insances."""
+    return cls.from_string(data)
+_unpickle_message.__safe_for_unpickling__ = True
 
 
 class Union(Type):

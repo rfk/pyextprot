@@ -70,29 +70,36 @@ __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,
 from extprot.errors import *
 
 
-def import_protocol(filename,namespace):
+def import_protocol(filename,namespace,module=None):
     """Dynamically load extprot protocol objects into the given namespace.
 
     This function dynamically compiles the protocol definitions found in
     the file 'filename' and loads the resulting objects into 'namespace'.
+    If the optional argument 'module' is provided, this string will be
+    set as the __module__ attribute of the created type classes.  You'll
+    need to use this if you want them to be picklable.
+
     For now this is the only way to compile a protocol file; soon support
     will be added for writing the compiled classes out to a Python file.
     """
     from extprot.compiler import NamespaceCompiler
-    nsc = NamespaceCompiler()
+    nsc = NamespaceCompiler(module=module)
     nsc.compile(filename)
     for (n,v) in nsc.namespace.iteritems():
         namespace[n] = v 
 
 
-def import_protocol_string(string,namespace):
+def import_protocol_string(string,namespace,module=None):
     """Dynamically load extprot protocol objects into the given namespace.
 
     This function dynamically compiles the protocol definitions found in
     the string 'string' and loads the resulting objects into 'namespace'.
+    If the optional argument 'module' is provided, this string will be
+    set as the __module__ attribute of the created type classes.  You'll
+    need to use this if you want them to be picklable.
     """
     from extprot.compiler import NamespaceCompiler
-    nsc = NamespaceCompiler()
+    nsc = NamespaceCompiler(module=module)
     nsc.compile_string(string)
     for (n,v) in nsc.namespace.iteritems():
         namespace[n] = v 

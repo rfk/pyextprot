@@ -148,12 +148,20 @@ class BaseCompiler:
 
 
 class NamespaceCompiler(BaseCompiler):
-    """Compile a .proto file directly to objects in a python namespace."""
+    """Compile a .proto file directly to objects in a python namespace.
 
-    def __init__(self,namespace=None):
+    If the optional argument "module" is given, the created type classes
+    will have that set as their __module__ attribute.  You'll need to do this
+    if you want to make them pickleable.
+    """
+
+    def __init__(self,namespace=None,module=None):
         if namespace is None:
             namespace = {}
+        if module is None:
+            module = "<extprot.dynamic>"
         self.namespace = namespace
+        self.module = module
         BaseCompiler.__init__(self)
 
     def build_prim_type(self,instring,loc,tokenlist):
@@ -193,7 +201,7 @@ class NamespaceCompiler(BaseCompiler):
                     pass
                 Opt._types = tuple(opt_data[1:])
                 Opt.__name__ = opt_data[0]
-                Opt.__module__ = "<extprot.dynamic>"
+                Opt.__module__ = self.module
                 locals()[opt_data[0]] = Opt
                 del Opt
             del opt_data
@@ -224,7 +232,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(type,pvar_map)
         type.__name__ = name
-        type.__module__ = "<extprot.dynamic>"
+        type.__module__ = self.module
         self.namespace[name] = type
         return None
 
@@ -249,7 +257,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(Anon)
         Anon.__name__ = name
-        Anon.__module__ = "<extprot.dynamic>"
+        Anon.__module__ = self.module
         self.namespace[name] = Anon
         return None
 
@@ -268,7 +276,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(Anon)
         Anon.__name__ = name
-        Anon.__module__ = "<extprot.dynamic>"
+        Anon.__module__ = self.module
         self.namespace[name] = Anon
         return None
 
