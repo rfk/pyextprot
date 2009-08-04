@@ -593,7 +593,7 @@ class Field(Type):
         self._creation_order = Field._creation_counter
         Field._creation_counter += 1
         self._types = (type,)
-        self.mutable = False
+        self.mutable = mutable
 
     def __get__(self,obj,type=None):
         try:
