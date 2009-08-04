@@ -493,7 +493,7 @@ class Option(Type):
         """
         if not cls._types:
             if values:
-                raise TypeError("values given to constant Option")
+                raise ValueError("values given to constant Option")
             return cls
         else:
             return Type.__new__(cls)
