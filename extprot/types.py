@@ -445,7 +445,10 @@ class _UnionMetaclass(type):
                 else:
                     t._index = t_idx
                     t_idx += 1
-        #  Build the prefix lookup table
+                #  Adjust __name__ and __module__ to allow pickling
+                if _issubclass(t,Message):
+                    t.__name__ = cls.__name__+"."+t.__name__
+                    t.__module__ = cls.__module__
         cls._option_from_prefix = {}
         for t in cls._types:
             # TODO: delegate this formatting to the stream somehow?
@@ -735,12 +738,25 @@ class Message(Type):
         return True
 
     def __reduce__(self):
-        """Pickle Messages by serializing them."""
-        return (_unpickle_message,(self.__class__,self.to_string()))
+        """Pickle Messages by serializing them.
+
+        For this to work, we have to be able to find the Message class
+        after unpickling.  This means that self.__class__.__name__ and
+        self.__class__.__module__ must be set to something useful. In
+        particuler, __name__ on inner classes must be set to the full
+        dotted name of the class.
+        """
+        cls = self.__class__
+        args = (cls.__module__,cls.__name__,self.to_string())
+        return (_unpickle_message,args)
 
 
-def _unpickle_message(cls,data):
+def _unpickle_message(module,name,data):
     """Helper function for unpickled of Message insances."""
+    mname = module.split(".")[-1]
+    cls = __import__(module,fromlist=[mname])
+    for nm in name.split("."):
+        cls = getattr(cls,nm)
     return cls.from_string(data)
 _unpickle_message.__safe_for_unpickling__ = True
 

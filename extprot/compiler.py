@@ -200,8 +200,7 @@ class NamespaceCompiler(BaseCompiler):
                 class Opt(types.Option):
                     pass
                 Opt._types = tuple(opt_data[1:])
-                Opt.__name__ = opt_data[0]
-                Opt.__module__ = self.module
+                self._adjust_type_name(Opt,opt_data[0])
                 locals()[opt_data[0]] = Opt
                 del Opt
             del opt_data
@@ -231,8 +230,7 @@ class NamespaceCompiler(BaseCompiler):
         type._unbound_types = tuple(unbounds)
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(type,pvar_map)
-        type.__name__ = name
-        type.__module__ = self.module
+        self._adjust_type_name(type,name)
         self.namespace[name] = type
         return None
 
@@ -256,8 +254,7 @@ class NamespaceCompiler(BaseCompiler):
             del nm, f
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(Anon)
-        Anon.__name__ = name
-        Anon.__module__ = self.module
+        self._adjust_type_name(Anon,name)
         self.namespace[name] = Anon
         return None
 
@@ -275,8 +272,7 @@ class NamespaceCompiler(BaseCompiler):
             del msg, Msg, m_name, m_dict, nm, f
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(Anon)
-        Anon.__name__ = name
-        Anon.__module__ = self.module
+        self._adjust_type_name(Anon,name)
         self.namespace[name] = Anon
         return None
 
@@ -294,6 +290,14 @@ class NamespaceCompiler(BaseCompiler):
             if params:
                 val = types.bind(val,*params)
             setter(val)
+
+    def _adjust_type_name(self,type,name):
+        """Set __name__ and __module__ to something useful."""
+        type.__module__ = self.module
+        type.__name__ = name
+        for t1 in type._types:
+            if types._issubclass(t1,types.Message):
+                t1.__name__ = name+"."+t1.__name__
 
 
 if __name__ == "__main__":
