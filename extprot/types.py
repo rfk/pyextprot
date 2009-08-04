@@ -513,6 +513,7 @@ class Option(Type):
         self._values[index] = self._types[index].convert(value)
 
     def __eq__(self,other):
+        print "EQ"
         return self._values == other._values
 
     @classmethod
@@ -717,7 +718,7 @@ class Message(Type):
 
     @classmethod
     def to_stream(cls,value,stream):
-        values = ((t.to_stream,t.__get__(value)) for t in cls._types)
+        values = ((t.to_stream,value.__dict__[t._name]) for t in cls._types)
         stream.write_Tuple(value._index,values)
 
     def to_string(self):
