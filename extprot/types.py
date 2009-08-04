@@ -71,7 +71,8 @@ class Type(object):
     def _convert_types(cls,values,types=None):
         """Convert a sequence of values using a type tuple.
 
-        If no type tuple is given, cls._types is used.
+        If no type tuple is given, cls._types is used.  If there aren't
+        enough values for the number of types, we try to use default values.
         """
         values = iter(values)
         if types is None:
@@ -80,7 +81,7 @@ class Type(object):
             try:
                 v = values.next()
             except StopIteration:
-                raise ValueError("too few values to convert")
+                yield t.default()
             else:
                 yield t.convert(v)
         try:
@@ -284,8 +285,6 @@ class Tuple(Type):
         values = []
         for t in cls._types[:nelems]:
             values.append(t.from_stream(stream))
-        for t in cls._types[nelems:]:
-            values.append(t.default())
         for _ in xrange(max(0,nelems - len(cls._types))):
             stream.skip_value()
         return cls._convert_types(values)
@@ -536,7 +535,12 @@ class Option(Type):
             if unify_types(cls._types,value._types) is None:
                 raise ValueError("not this Option type")
             return cls
-        #  Not an Option class or instance, must be a direct value tuple
+        #  Not an Option class or instance, must be a direct value tuple.
+        #  A scalar is converted into a tuple of length 1.
+        try:
+            value = iter(value)
+        except TypeError:
+            value = (value,)
         return cls(*value)
 
     @classmethod
@@ -551,9 +555,8 @@ class Option(Type):
         values = []
         for t in cls._types[:nelems]:
             values.append(t.from_stream(stream))
-        for t in cls._types[nelems:]:
+        for _ in xrange(max(0,nelems - len(cls._types))):
             stream.skip_value()
-            values.append(t.default())
         return cls(*cls._convert_types(values))
 
     @classmethod
