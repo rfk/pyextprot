@@ -538,10 +538,13 @@ class Option(Type):
                 return cls
         #  Not an Option class or instance, must be a direct value tuple.
         #  A scalar is converted into a tuple of length 1.
-        try:
-            value = iter(value)
-        except TypeError:
+        if isinstance(value,basestring):
             value = (value,)
+        else:
+            try:
+                value = iter(value)
+            except TypeError:
+                value = (value,)
         return cls(*value)
 
     @classmethod
@@ -802,7 +805,7 @@ class Union(Type):
                 return v
             except ValueError, e:
                 pass
-        raise ValueError("could not convert value '" + repr(value) + "' to Union type '" + repr(cls) + "'")
+        raise ValueError("could not convert value " + repr(value) + " to Union type " + repr(cls))
 
     @classmethod
     def default(cls):
