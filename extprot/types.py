@@ -29,7 +29,7 @@ this object structure automatically from a .proto souce file.
 import struct
 
 from extprot.errors import *
-from extprot.stream import StringStream
+from extprot.stream import Stream, StringStream
 
 
 def _issubclass(cls,bases):
@@ -116,6 +116,11 @@ class Type(object):
     @classmethod
     def from_string(cls,string):
         s = StringStream(string)
+        return cls.from_stream(s)
+
+    @classmethod
+    def from_file(cls,file):
+        s = Stream(file)
         return cls.from_stream(s)
 
     def __eq__(self,other):
@@ -726,6 +731,9 @@ class Message(Type):
         self.to_stream(s)
         return s.getstring()
 
+    def to_file(self,file):
+        self.to_stream(Stream(file))
+
     @classmethod
     def from_string(cls,string):
         s = StringStream(string)
@@ -828,7 +836,11 @@ class Union(Type):
 
     @classmethod
     def to_stream(cls,value,stream):
-        value.to_stream(value,stream)
+        if isinstance(value,Message):
+            vcls = value.__class__
+        else:
+            vcls = value
+        vcls.to_stream(value,stream)
 
    
 class Unbound(Type):
