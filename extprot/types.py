@@ -324,9 +324,6 @@ class _TypedList(list):
         items = (self._types.convert(i) for i in sequence)
         super(_TypedList,self).__setslice__(i,j,items)
 
-    def __contains__(self,item):
-        super(_TypedList,self).__contains__(self._type.convert(item))
-
     def append(self,item):
         return super(_TypedList,self).append(self._type.convert(item))
 
@@ -614,7 +611,11 @@ class Field(Type):
         if not self.mutable and obj._initialized:
             raise AttributeError("Field '"+self._name+"' is not mutable")
         if value is None:
-            value = self._types[0].default()
+            try:
+                value = self._types[0].default()
+            except UndefinedDefaultError:
+                msg = "value required for field " + self._name
+                raise UndefinedDefaultError(msg)
         obj.__dict__[self._name] = self._types[0].convert(value)
 
     def from_stream(self,stream):
