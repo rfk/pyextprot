@@ -60,8 +60,8 @@ a tuple, list or union.
 """
 
 __ver_major__ = 0
-__ver_minor__ = 1
-__ver_patch__ = 1
+__ver_minor__ = 2
+__ver_patch__ = 0
 __ver_sub__ = ""
 __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,
                               __ver_patch__,__ver_sub__)
@@ -104,4 +104,19 @@ def import_protocol_string(string,namespace,module=None):
     for (n,v) in nsc.namespace.iteritems():
         namespace[n] = v 
 
+
+def compile_protocol(infile,outfile):
+    from extprot.compiler import ModuleCompiler
+    mc = ModuleCompiler()
+    mc.compile(infile)
+    for ln in mc.code_lines:
+        outfile.write(ln)
+        outfile.write("\n")
+
+
+def compile_protocol_string(string):
+    from extprot.compiler import ModuleCompiler
+    mc = ModuleCompiler()
+    mc.compile_string(string)
+    return "\n".join(mc.code_lines)
 

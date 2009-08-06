@@ -3,7 +3,7 @@
   extprot.compiler:  protocol description compiler for extprot
 
 This module provides the necessary infrastructure to compile the language-
-neutral extprot protocol description format into a the Python class structure
+neutral extprot protocol description format into the Python class structure
 defined by the extprot.types module.
 
 The only interesting thing currently in this module is the NamespaceCompiler
@@ -27,7 +27,7 @@ from extprot.errors import *
 from extprot import types
 
 
-class BaseCompiler:
+class BaseCompiler(object):
     """Base compiler class for extprot protocol descriptions.
 
     This class defines the structure of the extprot grammar and connects
@@ -162,7 +162,7 @@ class NamespaceCompiler(BaseCompiler):
             module = "<extprot.dynamic>"
         self.namespace = namespace
         self.module = module
-        BaseCompiler.__init__(self)
+        super(NamespaceCompiler,self).__init__()
 
     def build_prim_type(self,instring,loc,tokenlist):
         type = tokenlist[0]
@@ -300,10 +300,181 @@ class NamespaceCompiler(BaseCompiler):
                 t1.__name__ = name+"."+t1.__name__
 
 
+class ModuleCompiler(BaseCompiler):
+    """Compile a .proto file into sourcecode for a python module.
+
+    Currently the code is built in memory and returned as a string.
+    """
+
+    def __init__(self,code_lines=None):
+        if code_lines is None:
+            code_lines = []
+        self.code_lines = code_lines
+        super(ModuleCompiler,self).__init__()
+
+    def compile(self,stream):
+        self._defined_names = {}
+        self.code_lines.append("")
+        self.code_lines.append("from extprot import types")
+        self.code_lines.append("")
+        self.code_lines.append("")
+        super(ModuleCompiler,self).compile(stream)
+ 
+    def compile_string(self,stream):
+        self._defined_names = {}
+        self.code_lines.append("")
+        self.code_lines.append("from extprot import types")
+        self.code_lines.append("")
+        self.code_lines.append("")
+        super(ModuleCompiler,self).compile_string(stream)
+
+    def _tuple_string(self,values):
+        tstr = ",".join(values)
+        if len(values) == 1:
+            tstr += ","
+        return tstr
+
+    def build_prim_type(self,instring,loc,tokenlist):
+        type = tokenlist[0]
+        if type == "int":
+            return 'types.Int'
+        if type == "bool":
+            return 'types.Bool'
+        if type == "byte":
+            return 'types.Byte'
+        if type == "long":
+            return 'types.Long'
+        if type == "float":
+            return 'types.Float'
+        if type == "string":
+            return 'types.String'
+        raise CompilerError("unrecognised primitive type: " + type)
+
+    def build_tuple_type(self,instring,loc,tokenlist):
+        types = self._tuple_string(tokenlist)
+        return 'types.Tuple.build(%s)' % (types,)
+
+    def build_array_type(self,instring,loc,tokenlist):
+        return 'types.Array.build(%s)' % (tokenlist[0],)
+
+    def build_list_type(self,instring,loc,tokenlist):
+        return 'types.List.build(%s)' % (tokenlist[0],)
+
+    def build_named_type(self,instring,loc,tokenlist):
+        #  We can only resolve names once the entire defn is built.
+        #  For now we just store a placeholder.
+        if len(tokenlist) == 1:
+            return self._get_placeholder_name(tokenlist[0])
+        nm = self._get_placeholder_name(tokenlist[0])
+        args = self._tuple_string(tokenlist[1:])
+        return "types.bind(" + nm + "," + args + ")"
+
+    def build_union_type(self,instring,loc,tokenlist):
+        lines = ['types.Union']
+        if tokenlist:
+            for opt_data in tokenlist:
+                opt_name = opt_data[0]
+                opt_types = self._tuple_string(opt_data[1:])
+                lines.append("class %s(types.Option):" % (opt_name,))
+                lines.append("    _types = (%s)" % (opt_types,))
+        else:
+            lines.append("pass")
+        return [lines]
+
+    def build_type_expr(self,instring,loc,tokenlist):
+        return tokenlist[0]
+
+    def build_type_stmt(self,instring,loc,tokenlist):
+        if isinstance(tokenlist[0],basestring):
+            if "(" not in tokenlist[0]:
+                return [[tokenlist[0],"pass"]]
+            bits = tokenlist[0].split(".build(")
+            if len(bits) > 1:
+                return [[bits[0],"_types = ("+bits[1][:-1]+")"]]
+        return [tokenlist[0]]
+
+    def build_type_def(self,instring,loc,tokenlist):
+        lines = []
+        name = tokenlist[0]
+        pvars = tokenlist[1:-1]
+        type = tokenlist[-1]
+        if pvars:
+            lines.append("_ubts = tuple(types.Unbound() for _ in xrange(%s))")
+            lines[-1] = lines[-1] % (len(pvars),)
+        if isinstance(type,basestring):
+            lines.append("%s = %s" % (name,type,))
+            if pvars:
+                lines.append("%s._unbound_types = _ubts" % (name,))
+        else:
+            lines.append("class %s(%s):" % (name,type[0]))
+            if pvars:
+                lines.append("    _unbound_types = _ubts")
+            for ln in type[1:]:
+                lines.append("    " + ln)
+        pvar_map = {}
+        for (i,nm) in enumerate(pvars):
+            pvar_map[nm] = "_ubts[%s]" % (i,)
+        self.code_lines.extend(self._resolve_placeholder_names(lines,pvar_map))
+        self.code_lines.append("")
+        self._defined_names[name] = name
+        return lines
+
+    def build_field_def(self,instring,loc,tokenlist):
+        if len(tokenlist) == 3:
+            name = tokenlist[1]
+            type = tokenlist[2]
+            return "%s = types.Field(%s,mutable=True)" % (name,type,)
+        else:
+            name = tokenlist[0]
+            type = tokenlist[1]
+            return "%s = types.Field(%s)" % (name,type,)
+
+    def build_simple_message(self,instring,loc,tokenlist):
+        name = tokenlist[0]
+        fields = tokenlist[1:] 
+        lines = ["class %s(types.Message):" % (name,)]
+        for f in fields:
+            lines.append("    " + f)
+        self.code_lines.extend(self._resolve_placeholder_names(lines))
+        self.code_lines.append("")
+        self._defined_names[name] = name
+        return None
+
+    def build_union_message(self,instring,loc,tokenlist):
+        name = tokenlist[0]
+        messages = tokenlist[1:]
+        lines = ["class %s(types.Union):" % (name,)]
+        for msg in messages:
+            m_name = msg[0]
+            lines.append("    class %s(types.Message):" % (m_name,))
+            for field in msg[1:]:
+                lines.append("        " + field)
+        self.code_lines.extend(self._resolve_placeholder_names(lines))
+        self.code_lines.append("")
+        self._defined_names[name] = name
+        return None
+
+    def _get_placeholder_name(self,name):
+        return "##" + name + "##"
+
+    def _resolve_placeholder_names(self,lines,locals={}):
+        newlines = []
+        for ln in lines:
+            for (name,value) in locals.iteritems():
+                ln = ln.replace(self._get_placeholder_name(name),value)
+            for (name,value) in self._defined_names.iteritems():
+                ln = ln.replace(self._get_placeholder_name(name),value)
+            bits = ln.split("##")
+            if len(bits) > 1:
+                raise CompilerError("unresolved name: " + bits[1])
+            newlines.append(ln)
+        return newlines
+
+
 if __name__ == "__main__":
     import sys
-    ns = {}
-    NamespaceCompiler(ns).compile(sys.stdin)
-    print ns
+    c = ModuleCompiler()
+    c.compile(sys.stdin)
+    print "\n".join(c.code_lines)
 
 

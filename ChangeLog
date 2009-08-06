@@ -1,4 +1,8 @@
 
+0.2.0:
+
+    * add ability to compile a .proto file to a .py file
+
 0.1.1:
 
     * add Type.from_file and Message.to_file

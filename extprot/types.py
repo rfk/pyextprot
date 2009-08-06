@@ -515,7 +515,6 @@ class Option(Type):
         self._values[index] = self._types[index].convert(value)
 
     def __eq__(self,other):
-        print "EQ"
         return self._values == other._values
 
     @classmethod

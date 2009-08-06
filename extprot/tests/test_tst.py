@@ -4,6 +4,8 @@
 
 import unittest
 from os import path
+import tempfile
+
 import extprot
 from extprot import types
 
@@ -109,9 +111,19 @@ def make_cases(metadata,meta,source,doc,dim,**extra):
 #  test the hard-crafted translation at the start of this file
 Test_handcrafted = make_cases(**globals())
 
-#  test the machine-generated transaltion
+#  test the dynamic in-memory compilation
+file = path.join(path.dirname(__file__),"../../../examples/tst.proto")
+dynamic = {}
+extprot.import_protocol(file,dynamic)
+Test_dynamic = make_cases(**dynamic)
+
+#  test the to-source-code compilation
 file = path.join(path.dirname(__file__),"../../../examples/tst.proto")
 compiled = {}
-extprot.import_protocol(file,compiled)
+modfile = tempfile.NamedTemporaryFile()
+extprot.compile_protocol(open(file),modfile)
+modfile.flush()
+execfile(modfile.name,compiled)
 Test_compiled = make_cases(**compiled)
+modfile.close()
 
