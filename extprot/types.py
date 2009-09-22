@@ -26,6 +26,7 @@ this object structure automatically from a .proto souce file.
 
 """
 
+import sys
 import struct
 from itertools import izip
 
@@ -461,8 +462,10 @@ class _UnionMetaclass(type):
                     t_idx += 1
                 #  Adjust __name__ and __module__ to allow pickling
                 if _issubclass(t,Message):
-                    t.__name__ = cls.__name__+"."+t.__name__
-                    t.__module__ = cls.__module__
+                    mod = sys.modules.get(t.__module__)
+                    if getattr(mod,t.__name__,None) is not t:
+                        t.__name__ = cls.__name__+"."+t.__name__
+                        t.__module__ = cls.__module__
         cls._option_from_prefix = {}
         for t in cls._types:
             # TODO: delegate this formatting to the stream somehow?
