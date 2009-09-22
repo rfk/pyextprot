@@ -89,7 +89,7 @@ Test_dynamic = make_cases(**dynamic)
 file = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
 compiled = {}
 modfile = tempfile.NamedTemporaryFile()
-extprot.compile_protocol(open(file),modfile)
+extprot.compile_protocol(file,modfile)
 modfile.flush()
 execfile(modfile.name,compiled)
 Test_compiled = make_cases(**compiled)

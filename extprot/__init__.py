@@ -57,6 +57,17 @@ extensions that include: adding fields to a message, adding elements to a
 tuple, adding cases to a disjoint union, and promoting a primitive type into
 a tuple, list or union.
 
+The function extprot.import_protocol() will dynamically load a protocol file
+and convert it into the corresponding python class structure. This is quite
+convenient while developing a protocol since it avoids an extra compilation
+step, but it does add some startup overhead and requires the pyparsing module.
+
+To compile a protocol definition into python sourcecode for the corresponding
+class definitions, use the function extprot.compile_protocol() or pipe the file
+through extprot/compiler.py like so:
+
+  $ cat mydefs.proto | python extprot/compiler.py > mydefs.py
+
 """
 
 __ver_major__ = 0
@@ -77,10 +88,11 @@ def import_protocol(filename,namespace,module=None):
     the file 'filename' and loads the resulting objects into 'namespace'.
     If the optional argument 'module' is provided, this string will be
     set as the __module__ attribute of the created type classes.  You'll
-    need to use this if you want them to be picklable.
+    need to use this if you want them to be pickleable.
 
-    For now this is the only way to compile a protocol file; soon support
-    will be added for writing the compiled classes out to a Python file.
+    If the protocol file is fairly static then you may prefer to compile it
+    into a python module, so it can be imported directly without any parsing
+    overhead.  The function extprot.compile_protocol() can be used for this.
     """
     from extprot.compiler import NamespaceCompiler
     nsc = NamespaceCompiler(module=module)
@@ -106,6 +118,17 @@ def import_protocol_string(string,namespace,module=None):
 
 
 def compile_protocol(infile,outfile):
+    """Compile extprot protocol objects into python sourcecode.
+
+    This function compiles the protocol definitions found in 'infile'
+    to sourcecode for their corresponding python class definitions.  The
+    compiled code is written into 'outfile'.  Both 'infile' and 'outfile'
+    can be specified as either a pathname or a file-like object.
+
+    If the protocol defnitions change often, it may be more convenient to
+    use the function extprot.import_protocol() to load them directly from
+    protocol file, at the expense of some additional parsing overhead.
+    """
     from extprot.compiler import ModuleCompiler
     mc = ModuleCompiler()
     mc.compile(infile)
@@ -115,6 +138,12 @@ def compile_protocol(infile,outfile):
 
 
 def compile_protocol_string(string):
+    """Compile extprot protocol objects into python sourcecode.
+
+    This function compiles the protocol definitions found in the given
+    string, returning sourcecode for their corresponding python class
+    definitions.
+    """
     from extprot.compiler import ModuleCompiler
     mc = ModuleCompiler()
     mc.compile_string(string)

@@ -303,7 +303,9 @@ class NamespaceCompiler(BaseCompiler):
 class ModuleCompiler(BaseCompiler):
     """Compile a .proto file into sourcecode for a python module.
 
-    Currently the code is built in memory and returned as a string.
+    Currently the code is built in memory as a list of strings.  After calling
+    compile() or compile_string(), the result is availabe in the attribute
+    'code_lines'.
     """
 
     def __init__(self,code_lines=None):
