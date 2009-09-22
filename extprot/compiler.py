@@ -6,18 +6,25 @@ This module provides the necessary infrastructure to compile the language-
 neutral extprot protocol description format into the Python class structure
 defined by the extprot.types module.
 
-The only interesting thing currently in this module is the NamespaceCompiler
-class, which dynamically compiles the protocol definition into live class
-objects and stores them into a given namespace:
+The NamespaceCompiler class dynamically compiles a protocol definition into
+class objects and stores them into a given namespace.  You would use it like
+so:
 
     nsc = NamespaceCompiler(globals())
     nsc.compile("mymessages.proto")
     nsc.compile_string("message a_bool { v: bool; }")
 
-Eventually there will also be a ModuleCompiler class that compiles the protocol
-into a python module file; this will avoid the overhead of re-compiling on
-every program invocation, and will also allow the protocol to be used without
-the pyparsing package installed.
+The ModuleCompiler class compiles a protocol definition into the sourcecode
+for these class objects, which can then be written into a file.
+
+    mc = ModuleCompiler()
+    mc.compile("mymessages.proto")
+    open("mymessage.py").write("\n".join(mc.code_lines))
+
+If you run this module as a script, it will run the ModuleCompiler class over
+stdin and write the resulting sourcecode to stdout.  Use it like so:
+
+    $ cat mymessage.proto | python extprot/compiler.py > mymessages.py
 
 """
 
