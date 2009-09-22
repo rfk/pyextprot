@@ -16,7 +16,27 @@ class recording(types.Union):
         title = types.Field(types.String)
     class CD(types.Message):
         title = types.Field(types.String)
-    
+
+class Pointer(types.Int):
+    """Pointer type dynamically loading object references."""
+    INSTANCES = {1: "hello", 3: "world"}
+    @classmethod
+    def convert(cls,value):
+        if isinstance(value,str):
+            for (k,v) in cls.INSTANCES.iteritems():
+                if v == value:
+                    return k
+            raise ValueError("not a valid Pointer")
+        return super(Pointer,cls).convert(value)
+    @classmethod
+    def retrieve(cls,value):
+        try:
+            return cls.INSTANCES[value]
+        except KeyError:
+            raise ValueError("no such Pointer: %s" % (value,))
+ 
+class PointerMsg(types.Message):
+    msg = types.Field(Pointer)
 
 file = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
 extprot.import_protocol(file,globals(),__name__)
@@ -34,5 +54,18 @@ class TestTypes(unittest.TestCase):
     def test_pickling_union(self):
         cd = recording.CD("Delta's Greated Hits")
         assert pickle.loads(pickle.dumps(cd)) == cd
+
+    def test_retrieve(self):
+        p = PointerMsg("hello")
+        self.assertEquals(p.msg,"hello")
+        self.assertEquals(p.__dict__['msg'],1)
+        p = PointerMsg(1)
+        self.assertEquals(p.msg,"hello")
+        self.assertEquals(p.__dict__['msg'],1)
+        self.assertRaises(ValueError,PointerMsg,"bugaloo")
+        p = PointerMsg(2)
+        self.assertEquals(p.__dict__['msg'],2)
+        self.assertRaises(ValueError,getattr,p,"msg")
+        
 
 

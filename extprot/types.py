@@ -48,7 +48,8 @@ class Type(object):
     interesting class-level methods:
 
         convert:      convert a python value to standard type representation
-        default:      retreive default value for type, if any
+        retrieve:     load a python value from standard type representation
+        default:      get the default value for type, if any
         from_stream:  parse value from an extprot bytestream
         to_stream:    write value to an extprot bytestream
 
@@ -68,6 +69,11 @@ class Type(object):
         return value
 
     @classmethod
+    def retrieve(cls,value):
+        """Load a python value from internal representation."""
+        return value
+
+    @classmethod
     def _convert_types(cls,values,types=None):
         """Convert a sequence of values using a type tuple.
 
@@ -84,6 +90,30 @@ class Type(object):
                 yield t.default()
             else:
                 yield t.convert(v)
+        try:
+            values.next()
+        except StopIteration:
+            pass
+        else:
+            raise ValueError("too many values to convert")
+
+    @classmethod
+    def _retrieve_types(cls,values,types=None):
+        """Retrieve a sequence of values using a type tuple.
+
+        If no type tuple is given, cls._types is used.  If there aren't
+        enough values for the number of types, we try to use default values.
+        """
+        values = iter(values)
+        if types is None:
+            types = cls._types
+        for t in types:
+            try:
+                v = values.next()
+            except StopIteration:
+                yield t.retrieve(t.default())
+            else:
+                yield t.retrieve(v)
         try:
             values.next()
         except StopIteration:
@@ -281,6 +311,14 @@ class Tuple(Type):
         return tuple(cls._convert_types(values))
 
     @classmethod
+    def retrieve(cls,value):
+        try:
+            values = iter(value)
+        except TypeError:
+            raise ValueError("not a valid Tuple")
+        return tuple(cls._retrieve_types(values))
+
+    @classmethod
     def default(cls):
         return tuple(t.default() for t in self._types)
 
@@ -313,6 +351,18 @@ class _TypedList(list):
         self._type = type
         super(_TypedList,self).__init__(items)
 
+    def __getitem__(self,key):
+        if isinstance(key,slice):
+             values = super(_TypedList,self).__getitem__(key)
+             return [self._type.retrieve(v) for v in values]
+        else:
+             value = super(_TypedList,self).__getitem__(key)
+             return self._type.retrieve(value)
+
+    def __getslice__(self,i,j):
+        values = super(_TypedList,self).__getslice__(i,j)
+        return [self._type.retrieve(v) for v in values]
+
     def __setitem__(self,key,value):
         if isinstance(key,slice):
             value = (self._type.convert(v) for v in value)
@@ -321,8 +371,8 @@ class _TypedList(list):
         super(_TypedList,self).__setitem__(key,value)
 
     def __setslice__(self,i,j,sequence):
-        items = (self._types.convert(i) for i in sequence)
-        super(_TypedList,self).__setslice__(i,j,items)
+        values = (self._types.convert(v) for v in sequence)
+        super(_TypedList,self).__setslice__(i,j,values)
 
     def append(self,item):
         return super(_TypedList,self).append(self._type.convert(item))
@@ -342,6 +392,10 @@ class _TypedList(list):
 
     def __iadd__(self,other):
         return super(_TypedList,self).__iadd__(_TypedList(self._type,other))
+
+    def pop(self,index):
+        value = super(_TypedList,self).pop(index)
+        return self._type.retrieve(value)
 
 
 class _List(Type):
@@ -419,7 +473,7 @@ class _UnionMetaclass(type):
         #  sort them into cls._types tuple.
         #  TODO: what aboud subclasses of a Union subclass that declare
         #        additional options?  Fortunately I don't think the parser
-        #        will ever generate suc a structure.
+        #        will ever generate such a structure.
         if "_types" not in attrs:
             types = []
             is_message_union = False
@@ -456,7 +510,7 @@ class _UnionMetaclass(type):
         cls._option_from_prefix = {}
         for t in cls._types:
             # TODO: delegate this formatting to the stream somehow?
-            #       a bit tricky when we don't have one yet.
+            #       A bit tricky when we don't have one yet.
             if _issubclass(t,Option) and not t._types:
                 prefix = ((t._index << 4) | 10)
             else:
@@ -509,7 +563,7 @@ class Option(Type):
         self._values = tuple(self._convert_types(values))
 
     def __getitem__(self,index):
-        return self._values[index]
+        return self._types[index].retrieve(self._values[index])
 
     def __setitem__(self,index,value):
         self._values[index] = self._types[index].convert(value)
@@ -602,9 +656,11 @@ class Field(Type):
 
     def __get__(self,obj,type=None):
         try:
-            return obj.__dict__[self._name]
+            value = obj.__dict__[self._name]
         except KeyError:
-            return self._types[0].default()
+            value = self._types[0].default()
+            obj.__dict__[self._name] = value
+        return self._types[0].retrieve(value)
 
     def __set__(self,obj,value):
         if not self.mutable and obj._initialized:
