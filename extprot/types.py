@@ -664,7 +664,7 @@ class Message(Type):
     __metaclass__ = _MessageMetaclass
 
     #  Messages can be part of a Union, giving them a specific index.
-    #  Stand-alone messaged always have an index of zero.
+    #  Stand-alone messages always have an index of zero.
     _index = 0
 
     def __init__(self,*args,**kwds):
