@@ -2,8 +2,6 @@
 0.2.0:
 
     * add ability to compile a .proto file to a .py file
-    * add 'retrieve' method to Type subclasses, allowing them to dynamically
-      load the Python representation of their value.
 
 0.1.1:
 

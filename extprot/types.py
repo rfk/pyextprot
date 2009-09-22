@@ -49,7 +49,6 @@ class Type(object):
     interesting class-level methods:
 
         convert:      convert a python value to standard type representation
-        retrieve:     load a python value from standard type representation
         default:      get the default value for type, if any
         from_stream:  parse value from an extprot bytestream
         to_stream:    write value to an extprot bytestream
@@ -70,11 +69,6 @@ class Type(object):
         return value
 
     @classmethod
-    def retrieve(cls,value):
-        """Load a python value from internal representation."""
-        return value
-
-    @classmethod
     def _convert_types(cls,values,types=None):
         """Convert a sequence of values using a type tuple.
 
@@ -91,30 +85,6 @@ class Type(object):
                 yield t.default()
             else:
                 yield t.convert(v)
-        try:
-            values.next()
-        except StopIteration:
-            pass
-        else:
-            raise ValueError("too many values to convert")
-
-    @classmethod
-    def _retrieve_types(cls,values,types=None):
-        """Retrieve a sequence of values using a type tuple.
-
-        If no type tuple is given, cls._types is used.  If there aren't
-        enough values for the number of types, we try to use default values.
-        """
-        values = iter(values)
-        if types is None:
-            types = cls._types
-        for t in types:
-            try:
-                v = values.next()
-            except StopIteration:
-                yield t.retrieve(t.default())
-            else:
-                yield t.retrieve(v)
         try:
             values.next()
         except StopIteration:
@@ -312,14 +282,6 @@ class Tuple(Type):
         return tuple(cls._convert_types(values))
 
     @classmethod
-    def retrieve(cls,value):
-        try:
-            values = iter(value)
-        except TypeError:
-            raise ValueError("not a valid Tuple")
-        return tuple(cls._retrieve_types(values))
-
-    @classmethod
     def default(cls):
         return tuple(t.default() for t in self._types)
 
@@ -352,18 +314,6 @@ class _TypedList(list):
         self._type = type
         items = (self._type.convert(i) for i in items)
         super(_TypedList,self).__init__(items)
-
-    def __getitem__(self,key):
-        if isinstance(key,slice):
-             values = super(_TypedList,self).__getitem__(key)
-             return [self._type.retrieve(v) for v in values]
-        else:
-             value = super(_TypedList,self).__getitem__(key)
-             return self._type.retrieve(value)
-
-    def __getslice__(self,i,j):
-        values = super(_TypedList,self).__getslice__(i,j)
-        return [self._type.retrieve(v) for v in values]
 
     def __setitem__(self,key,value):
         if isinstance(key,slice):
@@ -402,10 +352,6 @@ class _TypedList(list):
 
     def __iadd__(self,other):
         return super(_TypedList,self).__iadd__(_TypedList(self._type,other))
-
-    def pop(self,index):
-        value = super(_TypedList,self).pop(index)
-        return self._type.retrieve(value)
 
 
 class _List(Type):
@@ -573,7 +519,7 @@ class Option(Type):
         self._values = tuple(self._convert_types(values))
 
     def __getitem__(self,index):
-        return self._types[index].retrieve(self._values[index])
+        return self._values[index]
 
     def __setitem__(self,index,value):
         self._values[index] = self._types[index].convert(value)
@@ -670,7 +616,7 @@ class Field(Type):
         except KeyError:
             value = self._types[0].default()
             obj.__dict__[self._name] = value
-        return self._types[0].retrieve(value)
+        return value
 
     def __set__(self,obj,value):
         if not self.mutable and obj._initialized:
@@ -912,7 +858,7 @@ class Union(Type):
 class Unbound(Type):
     """Unbound type, for representing type parameters.
 
-    Attempts to use this clas in serialization raise errors.  Its intended
+    Attempts to use this class in serialization raise errors.  Its intended
     use is for individual instances to represent types that are not yet bound
     in polymorphic type declaration (i.e. to appear in cls._unbound_types).
     """
@@ -929,7 +875,7 @@ class Unbound(Type):
 class Placeholder(Type):
     """Placeholder type, for representing not-yet-defined type names.
 
-    Attempts to use this clas in serialization raise errors.  Its intended
+    Attempts to use this class in serialization raise errors.  Its intended
     use is for parsing routines to use it as a placeholder for typenames that
     haven't yet been defined.
     """
@@ -1002,7 +948,7 @@ def unify_types(type1,type2):
 
     This is simplistic type unification, where instances of Unbound() in 
     one type are allowed to match concrete types in the other.  The result
-    if either None (no unification is possible) or a list of (ub,bt) pairs
+    is either None (no unification is possible) or a list of (ub,bt) pairs
     giving the necessary substitutions.
     """
     return _unify_types_rec(type1,type2,[])
@@ -1069,7 +1015,7 @@ def _unify_types_rec(type1,type2,pairs):
 def resolve_placeholders(type):
     """Iterator for resolving Placeholder() types.
 
-    This function is a generator produce (name,setter) pairs, where
+    This function is a generator producing (name,setter) pairs, where
     'name' is the name from a Placeholder instance attached to the given
     type object, and 'setter' is a function that should be called with the
     resolved value for that placeholder.  Parsing code should drive it in
