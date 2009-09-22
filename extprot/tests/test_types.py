@@ -38,8 +38,13 @@ class Pointer(types.Int):
 class PointerMsg(types.Message):
     msg = types.Field(Pointer)
 
+class PointerMsgs(types.Message):
+    msgs = types.Field(types.List.build(Pointer))
+
+
 file = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
 extprot.import_protocol(file,globals(),__name__)
+
 
 class TestTypes(unittest.TestCase):
 
@@ -66,6 +71,12 @@ class TestTypes(unittest.TestCase):
         p = PointerMsg(2)
         self.assertEquals(p.__dict__['msg'],2)
         self.assertRaises(ValueError,getattr,p,"msg")
-        
+        ps = PointerMsgs([])
+        self.assertEquals(ps.msgs,[])
+        self.assertEquals(ps.__dict__['msgs'],[])
+        ps = PointerMsgs(["hello",3])
+        self.assertEquals(ps.msgs[0],"hello")
+        self.assertEquals(ps.msgs[1],"world")
+        self.assertEquals(ps.__dict__['msgs'],[1,3])
 
 

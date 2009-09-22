@@ -27,6 +27,7 @@ this object structure automatically from a .proto souce file.
 """
 
 import struct
+from itertools import izip
 
 from extprot.errors import *
 from extprot.stream import Stream, StringStream
@@ -336,7 +337,7 @@ class Tuple(Type):
 
     @classmethod
     def to_stream(cls,value,stream):
-        values = ((t.to_stream,v) for (t,v) in zip(cls._types,value))
+        values = ((t.to_stream,v) for (t,v) in izip(cls._types,value))
         stream.write_Tuple(0,values)
 
 
@@ -349,6 +350,7 @@ class _TypedList(list):
 
     def __init__(self,type,items=()):
         self._type = type
+        items = (self._type.convert(i) for i in items)
         super(_TypedList,self).__init__(items)
 
     def __getitem__(self,key):
@@ -373,6 +375,14 @@ class _TypedList(list):
     def __setslice__(self,i,j,sequence):
         values = (self._types.convert(v) for v in sequence)
         super(_TypedList,self).__setslice__(i,j,values)
+
+    def __contains__(self,value):
+        value = self._type.convert(value)
+        super(_TypedList,self).__contains__(value)
+
+    def __iter__(self):
+        for i in xrange(len(self)):
+            yield self[i]
 
     def append(self,item):
         return super(_TypedList,self).append(self._type.convert(item))
