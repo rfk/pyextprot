@@ -332,7 +332,7 @@ class _TypedList(list):
 
     def __contains__(self,value):
         value = self._store(value)
-        super(_TypedList,self).__contains__(value)
+        return super(_TypedList,self).__contains__(value)
 
     def __iter__(self):
         for i in xrange(len(self)):
