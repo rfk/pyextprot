@@ -1,4 +1,10 @@
 
+0.2.1:
+
+    * Improvements to types._TypedList class:
+        * now easier to subclass and extend
+        * fix bug in __contains__
+
 0.2.0:
 
     * add ability to compile a .proto file to a .py file
