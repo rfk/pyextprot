@@ -112,13 +112,13 @@ def make_cases(metadata,meta,source,doc,dim,**extra):
 Test_handcrafted = make_cases(**globals())
 
 #  test the dynamic in-memory compilation
-file = path.join(path.dirname(__file__),"../../../examples/tst.proto")
+file = path.join(path.dirname(__file__),"../../examples/tst.proto")
 dynamic = {}
 extprot.import_protocol(file,dynamic)
 Test_dynamic = make_cases(**dynamic)
 
 #  test the to-source-code compilation
-file = path.join(path.dirname(__file__),"../../../examples/tst.proto")
+file = path.join(path.dirname(__file__),"../../examples/tst.proto")
 compiled = {}
 modfile = tempfile.NamedTemporaryFile()
 extprot.compile_protocol(open(file),modfile)

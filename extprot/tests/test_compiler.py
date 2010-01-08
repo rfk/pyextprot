@@ -12,7 +12,7 @@ import extprot
 import extprot.compiler
 from extprot.types import *
 
-pfile = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
+pfile = path.join(path.dirname(__file__),"../../examples/address_book.proto")
 
 class TestCompiler(unittest.TestCase):
 

@@ -80,13 +80,13 @@ def make_cases(optional,phone_type,person,address_book,**extra):
 TestAddessBook_handcrafted = make_cases(**globals())
 
 #  test the dynamic in-memory compilation
-file = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
+file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
 dynamic = {}
 extprot.import_protocol(file,dynamic)
 Test_dynamic = make_cases(**dynamic)
 
 #  test the to-source-code compilation
-file = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
+file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
 compiled = {}
 modfile = tempfile.NamedTemporaryFile()
 extprot.compile_protocol(file,modfile)

@@ -18,7 +18,7 @@ class recording(types.Union):
         title = types.Field(types.String)
 
 
-file = path.join(path.dirname(__file__),"../../../examples/address_book.proto")
+file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
 extprot.import_protocol(file,globals(),__name__)
 
 
