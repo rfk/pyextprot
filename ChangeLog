@@ -2,6 +2,8 @@
 0.2.2:
 
     * let Message subclasses inherit Fields from their superclasses
+    * bundle examples in the source distribution, allowing test suite
+      to be run during deployment or installation
 
 0.2.1:
 
@@ -16,11 +18,11 @@
 0.1.1:
 
     * add Type.from_file and Message.to_file
-    * allow Message instances to be pickled by serializing them.
+    * allow Message instances to be pickled by serializing them
     * allow the Option constructor to provide default values
     * prevent Int fields from silently truncating other numeric types
 
 0.1.0:
 
-    * Initial release.
+    * Initial release
 
