@@ -485,7 +485,7 @@ class _OptionMetaclass(type):
     """Metaclass for Option type.
 
     This metaclass is responsible for populating Option._creation_order with
-    a increasing number indicating the order in which subclasses were created.
+    an increasing number indicating the order in which subclasses were created.
     """
 
     _creation_counter = 0
@@ -646,7 +646,7 @@ class _MessageMetaclass(type):
     """Metaclass for message type.
 
     This metaclass is responsible for populating Message._creation_order with
-    a increasing number indicating the order in which subclasses were created,
+    an increasing number indicating the order in which subclasses were created,
     setting the _name and _index properties on contained Field instances,
     and creating cls._types as a tuple of contained fields.
     """

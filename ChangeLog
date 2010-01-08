@@ -1,7 +1,7 @@
 
 0.2.1:
 
-    * Improvements to types._TypedList class:
+    * improvements to types._TypedList class:
         * now easier to subclass and extend
         * fix bug in __contains__
 

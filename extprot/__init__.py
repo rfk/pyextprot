@@ -3,7 +3,7 @@
   extprot:  compact, efficient, extensible binary serialization format
 
 This is a python implementation of the 'extprot' serialization scheme, the
-details of which are descripted in detail at:
+details of which are described at:
 
     http://eigenclass.org/R2/writings/extprot-extensible-protocols-intro
 
@@ -44,7 +44,7 @@ Extprot compares favourably to related serialization technologies:
 
    * powerful type system;  strongly-typed tuples and lists, tagged disjoint
                             unions, parametric polymorphism.
-   * self-delimitng data;   all serialized messages indicate their length,
+   * self-delimiting data;  all serialized messages indicate their length,
                             allowing easy streaming and skipping of messages.
    * self-describing data;  the 'skeleton' of a message can be reconstructed
                             without having the protocol definition.
