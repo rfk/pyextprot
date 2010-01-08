@@ -668,10 +668,11 @@ class _MessageMetaclass(type):
         #  Find all base Field instances that haven't been overridden.
         btypes = []
         for base in bases:
-            for t in base._types:
-                if t._name not in names:
-                    btypes.append(t)
-                    names[t._name] = True
+            if issubclass(base,Message):
+                for t in base._types:
+                    if t._name not in names:
+                        btypes.append(t)
+                        names[t._name] = True
         #  Merge types and base_types into the final types tuple.
         cls._types = tuple(t for t in btypes) + tuple(t for (_,_,t) in types)
         #  Label each field with its name and index in the message
@@ -679,6 +680,15 @@ class _MessageMetaclass(type):
             t._index = i + len(btypes)
             t._name = nm
         return cls
+
+
+class Message(Type):
+    """Fake composed message type.
+
+    This class exists only to fake out the _MessageMetaclass logic while
+    the real Message class is being created.
+    """
+    pass
 
 
 class Message(Type):
