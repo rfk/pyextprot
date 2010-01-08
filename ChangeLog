@@ -1,4 +1,8 @@
 
+0.2.2:
+
+    * let Message subclasses inherit Fields from their superclasses
+
 0.2.1:
 
     * improvements to types._TypedList class:

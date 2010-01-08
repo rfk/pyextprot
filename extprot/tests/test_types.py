@@ -36,4 +36,21 @@ class TestTypes(unittest.TestCase):
         cd = recording.CD("Delta's Greated Hits")
         assert pickle.loads(pickle.dumps(cd)) == cd
 
+    def test_subclass_fields(self):
+        class ActionMovie(movie):
+            severity = types.Field(types.Int)
+        self.assertEquals(len(ActionMovie._types),4)
+        m1 = ActionMovie(1,"Terminator",["Arnie","Linda"],7)
+        self.assertEquals(m1.title,"Terminator")
+        self.assertEquals(m1.severity,7)
+        class BuddyMovie(movie):
+            suck_factor = types.Field(types.Int)
+            actors = types.Field(types.List.build(types.String))
+        self.assertRaises(ValueError,BuddyMovie,2,"Beverly Hills Cop III",["Eddie","ThatOtherGuy"],5)
+        m2 = BuddyMovie(2,"Beverly Hills Cop III",5,["Eddie","ThatOtherGuy"])
+        self.assertEquals(m2.title,"Beverly Hills Cop III")
+        self.assertEquals(m2.id,2)
+        self.assertEquals(m2.suck_factor,5)
+
+
 

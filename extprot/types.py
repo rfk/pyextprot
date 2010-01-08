@@ -657,17 +657,26 @@ class _MessageMetaclass(type):
         cls = super(_MessageMetaclass,mcls).__new__(mcls,name,bases,attrs)
         cls._creation_order = mcls._creation_counter
         mcls._creation_counter += 1
-        #  Find all attributes that are Field instances and
-        #  sort them into cls._types tuple.
+        #  Find all attributes that are Field instances, sort in creation order.
         types = []
+        names = {}
         for (name,val) in attrs.iteritems():
             if isinstance(val,Field):
                 types.append((val._creation_order,name,val))
+                names[name] = True
         types.sort()
-        cls._types = tuple(t for (_,_,t) in types)
+        #  Find all base Field instances that haven't been overridden.
+        btypes = []
+        for base in bases:
+            for t in base._types:
+                if t._name not in names:
+                    btypes.append(t)
+                    names[t._name] = True
+        #  Merge types and base_types into the final types tuple.
+        cls._types = tuple(t for t in btypes) + tuple(t for (_,_,t) in types)
         #  Label each field with its name and index in the message
         for (i,(_,nm,t)) in enumerate(types):
-            t._index = i
+            t._index = i + len(btypes)
             t._name = nm
         return cls
 
