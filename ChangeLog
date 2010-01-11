@@ -1,4 +1,8 @@
 
+0.2.3:
+
+    * fix data corruption when loading Bool fields
+
 0.2.2:
 
     * let Message subclasses inherit Fields from their superclasses
