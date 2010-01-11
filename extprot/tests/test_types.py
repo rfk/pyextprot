@@ -17,6 +17,9 @@ class recording(types.Union):
     class CD(types.Message):
         title = types.Field(types.String)
 
+class OnOff(types.Message):
+    is_on = types.Field(types.Bool)
+
 
 file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
 extprot.import_protocol(file,globals(),__name__)
@@ -51,6 +54,14 @@ class TestTypes(unittest.TestCase):
         self.assertEquals(m2.title,"Beverly Hills Cop III")
         self.assertEquals(m2.id,2)
         self.assertEquals(m2.suck_factor,5)
+
+    def test_bool_field(self):
+        oo = OnOff(False)
+        self.assertEquals(oo.is_on,False)
+        self.assertEquals(OnOff.from_string(oo.to_string()).is_on,False)
+        oo = OnOff(True)
+        self.assertEquals(oo.is_on,True)
+        self.assertEquals(OnOff.from_string(oo.to_string()).is_on,True)
 
 
 

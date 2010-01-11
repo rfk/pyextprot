@@ -140,7 +140,7 @@ class Stream(object):
         """Read a single byte from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_BITS8)
-        return ord(self.read(1))
+        return self.read(1)
 
     def write_Bits8(self,data):
         self.write_prefix(self.TYPE_BITS8)
