@@ -560,7 +560,7 @@ class Option(Type):
             value = (value,)
         else:
             try:
-                value = iter(value)
+                value = tuple(value)
             except TypeError:
                 value = (value,)
         return cls(*value)
@@ -579,7 +579,7 @@ class Option(Type):
             values.append(t.from_stream(stream))
         for _ in xrange(max(0,nelems - len(cls._types))):
             stream.skip_value()
-        return cls(*cls._convert_types(values))
+        return cls(*list(cls._convert_types(values)))
 
     @classmethod
     def to_stream(cls,value,stream,types=None):
