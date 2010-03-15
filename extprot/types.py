@@ -140,6 +140,10 @@ class Bool(Type):
         return bool(value)
 
     @classmethod
+    def default(cls):
+        return False
+
+    @classmethod
     def from_stream(cls,stream):
         byte = stream.read_Bits8()
         return (byte != "\x00")
@@ -431,7 +435,7 @@ class _UnionMetaclass(type):
         cls = super(_UnionMetaclass,mcls).__new__(mcls,name,bases,attrs)
         #  Find all attributes that are Option or Message classes, and
         #  sort them into cls._types tuple.
-        #  TODO: what aboud subclasses of a Union subclass that declare
+        #  TODO: what about subclasses of a Union subclass that declare
         #        additional options?  Fortunately I don't think the parser
         #        will ever generate such a structure.
         if "_types" not in attrs:

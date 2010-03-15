@@ -2,7 +2,6 @@
 
   extprot:  classes for working with extprot bytestreams
 
-
 This module implements the low-level details of reading and writing extprot
 bytestreams.  The class 'Stream' wraps a readable/writable file-like object
 and provides methods such as read_Vint, write_Vint, etc for working with 
