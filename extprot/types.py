@@ -106,7 +106,7 @@ class Type(object):
         return Anon
 
     @classmethod
-    def from_stream(cls,stream):
+    def from_stream(cls,stream,prefix=None):
         """Parse a value of this type from an extprot bytestream."""
         raise NotImplementedError
 
@@ -144,8 +144,8 @@ class Bool(Type):
         return False
 
     @classmethod
-    def from_stream(cls,stream):
-        byte = stream.read_Bits8()
+    def from_stream(cls,stream,prefix=None):
+        byte = stream.read_Bits8(prefix=prefix)
         return (byte != "\x00")
 
     @classmethod
@@ -175,8 +175,8 @@ class Byte(Type):
             return value
 
     @classmethod
-    def from_stream(cls,stream):
-        return stream.read_Bits8()
+    def from_stream(cls,stream,prefix=None):
+        return stream.read_Bits8(prefix=prefix)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -193,8 +193,8 @@ class Int(Type):
         return value
 
     @classmethod
-    def from_stream(cls,stream):
-        n = stream.read_Vint()
+    def from_stream(cls,stream,prefix=None):
+        n = stream.read_Vint(prefix=prefix)
         if n % 2 == 0:
             return n // 2
         else:
@@ -220,8 +220,8 @@ class Long(Type):
             raise ValueError("too big for a long: " + repr(packed))
 
     @classmethod
-    def from_stream(cls,stream):
-        return stream.read_Bits64_long()
+    def from_stream(cls,stream,prefix=None):
+        return stream.read_Bits64_long(prefix=prefix)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -240,8 +240,8 @@ class Float(Type):
             raise ValueError("not a Float")
 
     @classmethod
-    def from_stream(cls,stream):
-        return stream.read_Bits64_float()
+    def from_stream(cls,stream,prefix=None):
+        return stream.read_Bits64_float(prefix=prefix)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -258,8 +258,8 @@ class String(Type):
         return value
 
     @classmethod
-    def from_stream(cls,stream):
-        return stream.read_Bytes()
+    def from_stream(cls,stream,prefix=None):
+        return stream.read_Bytes(prefix=prefix)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -291,16 +291,28 @@ class Tuple(Type):
         return tuple(t.default() for t in self._types)
 
     @classmethod
-    def from_stream(cls,stream):
-        prefix = stream.read_prefix(stream.TYPE_TUPLE)
-        stream.read_int()  # length is ignored
-        nelems = stream.read_int()
-        values = []
-        for t in cls._types[:nelems]:
-            values.append(t.from_stream(stream))
-        for _ in xrange(max(0,nelems - len(cls._types))):
-            stream.skip_value()
-        return cls._convert_types(values)
+    def from_stream(cls,stream,prefix=None):
+        if prefix is None:
+            prefix = stream.read_prefix()
+        try:
+            stream.check_prefix_type(prefix,stream.TYPE_TUPLE)
+        except UnexpectedWireTypeError:
+            #  Try to promote it from a primitive type to the first
+            #  item in the tuple
+            err = "could not promote primitive to Tuple type"
+            if not cls._types:
+                raise ParseError(err)
+            else:
+                return (cls._types[0].from_stream(stream,prefix=prefix),)
+        else:
+            stream.read_int()  # length is ignored
+            nelems = stream.read_int()
+            values = []
+            for t in cls._types[:nelems]:
+                values.append(t.from_stream(stream))
+            for _ in xrange(max(0,nelems - len(cls._types))):
+                stream.skip_value()
+            return cls._convert_types(values)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -381,8 +393,11 @@ class _List(Type):
         return _TypedList(cls._types[0])
 
     @classmethod
-    def from_stream(cls,stream):
-        prefix = stream.read_prefix(stream.TYPE_HTUPLE)
+    def from_stream(cls,stream,prefix=None):
+        if prefix is None:
+            prefix = stream.read_prefix(stream.TYPE_HTUPLE)
+        else:
+            stream.check_prefix_type(prefix,stream.TYPE_HTUPLE)
         stream.read_int() # length is ignored
         nelems = stream.read_int()
         values = _TypedList(cls._types[0])
@@ -639,8 +654,8 @@ class Field(Type):
                 raise UndefinedDefaultError(msg)
         obj.__dict__[self._name] = self._types[0].convert(value)
 
-    def from_stream(self,stream):
-        return self._types[0].from_stream(stream)
+    def from_stream(self,stream,prefix=None):
+        return self._types[0].from_stream(stream,prefix=prefix)
 
     def to_stream(self,value,stream):
         return self._types[0].to_stream(value,stream)
@@ -752,6 +767,8 @@ class Message(Type):
     def from_stream(cls,stream,prefix=None):
         if prefix is None:
             prefix = stream.read_prefix(stream.TYPE_TUPLE)
+        else:
+            stream.check_prefix_type(prefix,stream.TYPE_TUPLE)
         stream.read_int()  # length is ignored
         nelems = stream.read_int()
         values = []
@@ -867,13 +884,22 @@ class Union(Type):
         raise UndefinedDefaultError
 
     @classmethod
-    def from_stream(cls,stream):
-        prefix = stream.read_prefix()
+    def from_stream(cls,stream,prefix=None):
+        if prefix is None:
+            prefix = stream.read_prefix()
         try:
             opt = cls._option_from_prefix[prefix]
         except KeyError:
-            raise ParseError("not a Union type")
-        return opt.from_stream(stream,prefix=prefix)
+            #  Try to promote it from a primitive type to the first
+            #  non-constant option in this union.
+            err = "could not promote primitive to Union type"
+            for opt in cls._types:
+                if opt._types:
+                    return opt(opt._types[0].from_stream(stream,prefix=prefix))
+            else:
+                raise ParseError(err)
+        else:
+            return opt.from_stream(stream,prefix=prefix)
 
     @classmethod
     def to_stream(cls,value,stream):
@@ -893,7 +919,7 @@ class Unbound(Type):
     """
 
     @classmethod
-    def from_stream(self,stream):
+    def from_stream(self,stream,prefix=None):
         raise TypeError("parametric type not bound")
 
     @classmethod
@@ -913,7 +939,7 @@ class Placeholder(Type):
         self.name = name
 
     @classmethod
-    def from_stream(self,stream):
+    def from_stream(self,stream,prefix=None):
         raise TypeError("parametric type not bound")
 
     @classmethod

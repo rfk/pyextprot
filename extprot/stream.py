@@ -53,18 +53,19 @@ class Stream(object):
         except EOFError:
             pass
 
-    def read_value(self):
+    def read_value(self,prefix=None):
         """Read a generic value from the stream.
 
         If there are no more values, EOFError will be raised.
         """
         #  For efficiency's sake we dispatch on the value of the wire_type
         #  rather than using a big if-elif chain.
-        try:
-            prefix = self.read_prefix()
-        except UnexpectedEOFError:
-            # Actually, I expected that one
-            raise EOFError
+        if prefix is None:
+            try:
+                prefix = self.read_prefix()
+            except UnexpectedEOFError:
+                # Actually, I expected that one
+                raise EOFError
         wire_type = prefix & 0xf
         return self._LL_TYPES_READ[wire_type](self,prefix)
 
@@ -101,18 +102,23 @@ class Stream(object):
         """Read a value prefix, maybe checking its type."""
         prefix = self.read_int()
         if types is not None:
-            type = prefix & 0x0f
-            if isinstance(types,int):
-                if type != types:
-                    raise UnexpectedWireTypeError
-            else:
-                if type not in types:
-                    raise UnexpectedWireTypeError
+            self.check_prefix_type(prefix,types)
         return prefix
 
     def write_prefix(self,type,tag=0):
+        """Write a value prefix with the given type and optional tag."""
         self.write_int(tag << 4 | type)
-                    
+
+    def check_prefix_type(self,prefix,types):
+        """Check the type of the given prefix byte."""
+        type = prefix & 0x0f
+        if isinstance(types,int):
+            if type != types:
+                raise UnexpectedWireTypeError
+        else:
+            if type not in types:
+                raise UnexpectedWireTypeError
+    
     def read_array(self,prefix=None):
         """Read an array of items from the stream.
 
@@ -121,6 +127,8 @@ class Stream(object):
         """
         if prefix is None:
             prefix = self.read_prefix((self.TYPE_TUPLE,self.TYPE_HTUPLE))
+        else:
+            self.check_prefix_type(prefix,(self.TYPE_TUPLE,self.TYPE_HTUPLE))
         self.read_int() # length is ignored
         nelms = self.read_int()
         return [self.read_value() for _ in xrange(nelems)]
@@ -129,6 +137,8 @@ class Stream(object):
         """Read a Vint from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_VINT)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_VINT)
         return self.read_int()
 
     def write_Vint(self,data):
@@ -139,6 +149,8 @@ class Stream(object):
         """Read a single byte from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_BITS8)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_BITS8)
         return self.read(1)
 
     def write_Bits8(self,data):
@@ -149,6 +161,8 @@ class Stream(object):
         """Read a 32-bit integer from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_BITS32)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_BITS32)
         b = self.read(4)
         return struct.unpack("<L",b)[0]
 
@@ -160,6 +174,8 @@ class Stream(object):
         """Read a 64-bit integer from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_BITS64_LONG)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_BITS64_LONG)
         b = self.read(8)
         return struct.unpack("<Q",b)[0]
 
@@ -171,6 +187,8 @@ class Stream(object):
         """Read a 64-bit float from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_BITS64_FLOAT)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_BITS64_FLOAT)
         b = self.read(8)
         return struct.unpack("<d",b)[0]
 
@@ -181,7 +199,9 @@ class Stream(object):
     def read_Enum(self,prefix=None):
         """Read a tagged Enum from the stream."""
         if prefix is None:
-            prefix = self.read_prefix(self.TYPE_BITS64_ENUM)
+            prefix = self.read_prefix(self.TYPE_ENUM)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_ENUM)
         return prefix
 
     def write_Enum(self,data):
@@ -194,6 +214,8 @@ class Stream(object):
         """
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_BYTES)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_BYTES)
         size = self.read_int()
         return self.read(size)
 
@@ -206,6 +228,8 @@ class Stream(object):
         """Read a Tuple type from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_TUPLE)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_TUPLE)
         tag = self.get_tag(prefix)
         return (tag,self.read_array(prefix))
 
@@ -223,6 +247,8 @@ class Stream(object):
         """Read a HTuple type from the stream."""
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_HTUPLE)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_HTUPLE)
         tag = self.get_tag(prefix)
         return (tag,self.read_array(prefix))
 
@@ -244,6 +270,8 @@ class Stream(object):
         """
         if prefix is None:
             prefix = self.read_prefix(self.TYPE_ASSOC)
+        else:
+            self.check_prefix_type(prefix,self.TYPE_ASSOC)
         tag = self.get_tag(prefix)
         self.read_int()  # length is ignored
         npairs = self.read_int()
