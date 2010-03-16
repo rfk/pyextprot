@@ -1,4 +1,8 @@
 
+0.2.4:
+
+    * implement promotion of primitive types to Union and Tuple types.
+
 0.2.3:
 
     * fix data corruption when loading Bool fields
