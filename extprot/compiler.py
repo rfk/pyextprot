@@ -204,9 +204,10 @@ class NamespaceCompiler(BaseCompiler):
     def build_union_type(self,instring,loc,tokenlist):
         class Anon(types.Union):
             for opt_data in tokenlist:
-                class Opt(types.Option):
-                    pass
-                Opt._ep_types = tuple(opt_data[1:])
+                opt_dict = {}
+                opt_dict["_types"] = tuple(opt_data[1:])
+                opt_bases = (types.Option,)
+                Opt = types._OptionMetaclass(opt_data[0],opt_bases,opt_dict)
                 self._adjust_type_name(Opt,opt_data[0])
                 locals()[opt_data[0]] = Opt
                 del Opt
@@ -220,7 +221,7 @@ class NamespaceCompiler(BaseCompiler):
         #  Always take a subclass for top-level type statements,
         #  so we can safely set the __name__
         class Anon(tokenlist[0]):
-            _ep_types = tokenlist[0]._ep_types
+            _types = tokenlist[0]._types
         return Anon
 
     def build_type_def(self,instring,loc,tokenlist):
@@ -234,7 +235,7 @@ class NamespaceCompiler(BaseCompiler):
             ub = types.Unbound()
             pvar_map[pvar] = ub
             unbounds.append(ub)
-        type._ep_unbound_types = tuple(unbounds)
+        type._unbound_types = tuple(unbounds)
         #  Resolve any placeholder types, and store in the namespace
         self._resolve_placeholders(type,pvar_map)
         self._adjust_type_name(type,name)
@@ -302,7 +303,7 @@ class NamespaceCompiler(BaseCompiler):
         """Set __name__ and __module__ to something useful."""
         type.__module__ = self.module
         type.__name__ = name
-        for t1 in type._ep_types:
+        for t1 in type._types:
             if types._issubclass(t1,types.Message):
                 t1.__name__ = name+"."+t1.__name__
 
@@ -385,7 +386,7 @@ class ModuleCompiler(BaseCompiler):
                 opt_name = opt_data[0]
                 opt_types = self._tuple_string(opt_data[1:])
                 lines.append("class %s(types.Option):" % (opt_name,))
-                lines.append("    _ep_types = (%s)" % (opt_types,))
+                lines.append("    _types = (%s)" % (opt_types,))
         else:
             lines.append("pass")
         return [lines]
@@ -399,7 +400,7 @@ class ModuleCompiler(BaseCompiler):
                 return [[tokenlist[0],"pass"]]
             bits = tokenlist[0].split(".build(")
             if len(bits) > 1:
-                return [[bits[0],"_ep_types = ("+bits[1][:-1]+")"]]
+                return [[bits[0],"_types = ("+bits[1][:-1]+")"]]
         return [tokenlist[0]]
 
     def build_type_def(self,instring,loc,tokenlist):
@@ -413,11 +414,11 @@ class ModuleCompiler(BaseCompiler):
         if isinstance(type,basestring):
             lines.append("%s = %s" % (name,type,))
             if pvars:
-                lines.append("%s._ep_unbound_types = _ubts" % (name,))
+                lines.append("%s._unbound_types = _ubts" % (name,))
         else:
             lines.append("class %s(%s):" % (name,type[0]))
             if pvars:
-                lines.append("    _ep_unbound_types = _ubts")
+                lines.append("    _unbound_types = _ubts")
             for ln in type[1:]:
                 lines.append("    " + ln)
         pvar_map = {}

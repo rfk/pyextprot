@@ -119,60 +119,59 @@ class Stream(object):
             (type,tag) = self.read_prefix()
         except UnexpectedEOFError:
             raise EOFError
-        # TODO: promotion from primitive types
-        typcls = typcls._ep_from_primtype(type,tag)
         #  We depend on Cython to turn this into a switch.
         #  In interpreted mode it would be better to use a dict of
         #  function objects, but I'll compromise for compiled speed.
         if type == TYPE_VINT:
-            value = self.read_Vint(typcls)
+            value = self.read_Vint()
         elif type == TYPE_TUPLE:
-            value = self.read_Tuple(typcls)
+            items,subtypes = typcls._ep_parse_builder(type,tag)
+            value = self.read_Tuple(items,subtypes)
         elif type == TYPE_BITS8:
-            value = self.read_Bits8(typcls)
+            value = self.read_Bits8()
         elif type == TYPE_BYTES:
-            value = self.read_Bytes(typcls)
+            value = self.read_Bytes()
         elif type == TYPE_BITS32:
-            value = self.read_Bits32(typcls)
+            value = self.read_Bits32()
         elif type == TYPE_HTUPLE:
-            value = self.read_HTuple(typcls)
+            items,subtypes = typcls._ep_parse_builder(type,tag)
+            value = self.read_HTuple(items,subtypes)
         elif type == TYPE_BITS64_LONG:
-            value = self.read_Bits64_long(typcls)
+            value = self.read_Bits64_long()
         elif type == TYPE_ASSOC:
-            value = self.read_Assoc(typcls)
+            items,subtypes = typcls._ep_parse_builder(type,tag)
+            value = self.read_Assoc(items,subtypes)
         elif type == TYPE_BITS64_FLOAT:
-            value = self.read_Bits64_float(typcls)
+            value = self.read_Bits64_float()
         elif type == TYPE_ENUM:
-            value = typcls
+            value = None
         else:
             raise UnexpectedWireTypeError
-        return typcls._ep_parse(value)
+        value = typcls._ep_parse(type,tag,value)
+        return value
 
     def write_value(self,typcls,value):
         """Write a generic value to the stream."""
-        (typcls,type) = typcls._ep_get_primtype(value)
-        tag = typcls._ep_tag
-        print "WRITE", typcls, type, value, tag
+        (type,tag,value,subtypes) = typcls._ep_render(value)         
         self.write_prefix(type,tag)
-        value = typcls._ep_render(value)
         if type == TYPE_VINT:
-            self.write_Vint(typcls,value)
+            self.write_Vint(value)
         elif type == TYPE_TUPLE:
-            self.write_Tuple(typcls,value)
+            self.write_Tuple(value,subtypes)
         elif type == TYPE_BITS8:
-            self.write_Bits8(typcls,value)
+            self.write_Bits8(value)
         elif type == TYPE_BYTES:
-            self.write_Bytes(typcls,value)
+            self.write_Bytes(value)
         elif type == TYPE_BITS32:
-            self.write_Bits32(typcls,value)
+            self.write_Bits32(value)
         elif type == TYPE_HTUPLE:
-            self.write_HTuple(typcls,value)
+            self.write_HTuple(value,subtypes)
         elif type == TYPE_BITS64_LONG:
-            self.write_Bits64_long(typcls,value)
+            self.write_Bits64_long(value)
         elif type == TYPE_ASSOC:
-            self.write_Assoc(typcls,value)
+            self.write_Assoc(value,subtypes)
         elif type == TYPE_BITS64_FLOAT:
-            self.write_Bits64_float(typcls,value)
+            self.write_Bits64_float(value)
         elif type == TYPE_ENUM:
             pass
         else:
@@ -211,50 +210,50 @@ class Stream(object):
         else:
             raise UnexpectedWireTypeError
 
-    def read_Vint(self,typcls):
+    def read_Vint(self):
         """Read a Vint from the stream."""
         return self.read_int()
 
-    def write_Vint(self,typcls,value):
+    def write_Vint(self,value):
         """Write a Vint to the stream."""
         self.write_int(value)
 
-    def read_Bits8(self,typcls):
+    def read_Bits8(self):
         """Read a single byte from the stream."""
         return self.read(1)
 
-    def write_Bits8(self,typcls,value):
+    def write_Bits8(self,value):
         """Write a single byte to the stream."""
         self.write(value)
 
-    def read_Bits32(self,typcls):
+    def read_Bits32(self):
         """Read a 32-bit integer from the stream."""
         b = self.read(4)
         return _unpack_bits32(b)
 
-    def write_Bits32(self,typcls,value):
+    def write_Bits32(self,value):
         """Write a 32-bit integer to the stream."""
         self.write(_pack_bits32(value))
 
-    def read_Bits64_long(self,typcls):
+    def read_Bits64_long(self):
         """Read a 64-bit integer from the stream."""
         b = self.read(8)
         return _unpack_bits64_long(b)
 
-    def write_Bits64_long(self,typcls,value):
+    def write_Bits64_long(self,value):
         """Write a 64-bit integer to the stream."""
         self.write(_pack_bits64_long(value))
 
-    def read_Bits64_float(self,typcls):
+    def read_Bits64_float(self):
         """Read a 64-bit float from the stream."""
         b = self.read(8)
         return _unpack_bits64_float(b)
 
-    def write_Bits64_float(self,typcls,value):
+    def write_Bits64_float(self,value):
         """Write a 64-bit float to the stream."""
         self.write(_pack_bits64_float(value))
 
-    def read_Bytes(self,typcls):
+    def read_Bytes(self):
         """Read a byte string from the stream.
 
         Byte strings are encoded as [length]<bytes>.
@@ -262,18 +261,17 @@ class Stream(object):
         size = self.read_int()
         return self.read(size)
 
-    def write_Bytes(self,typcls,value):
+    def write_Bytes(self,value):
         """Write a byte string to the stream."""
         self.write_int(len(value))
         self.write(value)
 
-    def read_Tuple(self,typcls):
+    def read_Tuple(self,items,subtypes):
         """Read a Tuple type from the stream.
 
         These are encoded as [length][num elements]<elements>.  The length
         field is ignored (it's used to skip over unwanted values).
         """
-        # TODO: convertion from primitive type to Tuple
         length = self.read_int()
         #  For small items it's quicker to read all the data into a string
         #  and parse it in memory than to do lots of small reads from the file.
@@ -281,33 +279,32 @@ class Stream(object):
             stream = StringStream(self.read(length))
         else:
             stream = self
-        ntypes = len(typcls._ep_types)
+        ntypes = len(subtypes)
         nitems = stream.read_int()
-        items = []
         if nitems <= ntypes:
             for i in xrange(nitems):
-                items.append(stream.read_value(typcls._ep_types[i]))
+                items.append(stream.read_value(subtypes[i]))
             for i in xrange(nitems,ntypes):
-                items.append(typcls._ep_types[i].default())
+                items.append(subtypes[i]._ep_default())
         else:
             for i in xrange(ntypes):
-                items.append(stream.read_value(typcls._ep_types[i]))
+                items.append(stream.read_value(subtypes[i]))
             for i in xrange(ntypes,nitems):
                 stream.skip_value()
         return items
 
-    def write_Tuple(self,typcls,value):
+    def write_Tuple(self,value,subtypes):
         """Write a Tuple type to the stream."""
         sub = StringStream()
         nitems = len(value)
         sub.write_int(nitems)
         for i in xrange(nitems):
-            sub.write_value(typcls._ep_types[i],value[i])
+            sub.write_value(subtypes[i],value[i])
         data = sub.getstring()
         self.write_int(len(data))
         self.write(data)
 
-    def read_HTuple(self,typcls):
+    def read_HTuple(self,items,subtypes):
         """Read a HTuple type from the stream.
 
         These are encoded as [length][num elements]<elements>.  The length
@@ -321,23 +318,23 @@ class Stream(object):
         else:
             stream = self
         nitems = stream.read_int()
-        items = typcls._ep_default()
+        # TODO: get proper list class
         for i in xrange(nitems):
-            items.append(stream.read_value(typcls._ep_types[0]))
+            items.append(stream.read_value(subtypes[0]))
         return items
 
-    def write_HTuple(self,typcls,value):
+    def write_HTuple(self,value,subtypes):
         """Write a HTuple type to the stream."""
         sub = StringStream()
         nitems = len(value)
         sub.write_int(nitems)
         for item in value:
-            sub.write_value(typcls._ep_types[0],item)
+            sub.write_value(subtypes[0],item)
         data = sub.getstring()
         self.write_int(len(data))
         self.write(data)
 
-    def read_Assoc(self,typcls):
+    def read_Assoc(self,items,subtypes):
         """Read an Assoc type from the stream.
 
         These are encoded as [length][num pairs]<pairs>.  The length
@@ -351,21 +348,20 @@ class Stream(object):
         else:
             stream = self
         npairs = stream.read_int()
-        items = typcls._ep_default()
         for i in xrange(npairs):
-            key = stream.read_value(typcls._ep_types[0])
-            val = stream.read_value(typcls._ep_types[1])
+            key = stream.read_value(subtypes[0])
+            val = stream.read_value(subtypes[1])
             items[key] = val
         return items
 
-    def write_Assoc(self,typcls,value):
+    def write_Assoc(self,value,subtypes):
         """Write an Assoc type to the stream."""
         sub = StringStream()
         nitems = len(items)
         sub.write_int(nitems)
         for key,val in value.iteritems():
-            sub.write_value(typcls._ep_types[0],key)
-            sub.write_value(typcls._ep_types[1],val)
+            sub.write_value(subtypes[0],key)
+            sub.write_value(subtypes[1],val)
         data = sub.getstring()
         self.write_int(len(data))
         self.write(data)

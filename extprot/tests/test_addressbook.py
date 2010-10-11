@@ -11,20 +11,20 @@ from extprot import types
 
 _unbound_types = tuple(types.Unbound() for _ in xrange(1))
 class optional(types.Union):
-    _ep_unbound_types = _unbound_types
+    _unbound_types = _unbound_types
     class Unset(types.Option):
-        _ep_types = ()
+        _types = ()
     class Set(types.Option):
-        _ep_types = (_unbound_types[0],)
+        _types = (_unbound_types[0],)
 
 
 class phone_type(types.Union):
     class Mobile(types.Option):
-        _ep_types = ()
+        _types = ()
     class Home(types.Option):
-        _ep_types = ()
+        _types = ()
     class Work(types.Option):
-        _ep_types = ()
+        _types = ()
 
 
 class person(types.Message):
@@ -43,10 +43,10 @@ def make_cases(optional,phone_type,person,address_book,**extra):
     class TestAddressBook(unittest.TestCase):
 
         def test_types(self):
-            self.assertEquals(len(person._ep_types),4)
-            self.assertEquals(len(optional._ep_types),2)
-            assert issubclass(person._ep_types[2]._ep_type,optional)
-            self.assertEquals(len(person._ep_types[2]._ep_types),2)
+            self.assertEquals(len(person._types),4)
+            self.assertEquals(len(optional._types),2)
+            assert issubclass(person._types[2]._types[0],optional)
+            self.assertEquals(len(person._types[2]._types[0]._types),2)
 
         def test_person(self):
             p1 = person("Ryan",1,optional.Set("ryan@rfk.id.au"),[])
