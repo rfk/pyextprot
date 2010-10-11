@@ -54,7 +54,7 @@ class Type(object):
         from_stream:  parse value from an extprot bytestream
         to_stream:    write value to an extprot bytestream
 
-    If the type is composed from other types, the class attribute '_cls'
+    If the type is composed from other types, the class attribute '_types'
     will contain them as a tuple.  If the type is polymorphic, the class
     attribute '_unbound_types' will contain a tupe of instances of the
     special type 'Unbound'.  These unbound types can later be instantiated
