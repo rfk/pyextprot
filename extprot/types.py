@@ -253,6 +253,8 @@ class String(Type):
 
     @classmethod
     def convert(cls,value):
+        if isinstance(value,unicode):
+            value = value.encode("ascii")
         if not isinstance(value,str):
             raise ValueError("not a valid String: " + repr(value))
         return value
