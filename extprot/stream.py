@@ -275,7 +275,7 @@ class Stream(object):
         length = self.read_int()
         #  For small items it's quicker to read all the data into a string
         #  and parse it in memory than to do lots of small reads from the file.
-        if length < 4096:
+        if length < 4096 and not isinstance(self,StringStream):
             stream = StringStream(self.read(length))
         else:
             stream = self
@@ -313,7 +313,7 @@ class Stream(object):
         length = self.read_int()
         #  For small items it's quicker to read all the data into a string
         #  and parse it in memory than to do lots of small reads from the file.
-        if length < 4096:
+        if length < 4096 and not isinstance(self,StringStream):
             stream = StringStream(self.read(length))
         else:
             stream = self
@@ -343,7 +343,7 @@ class Stream(object):
         length = self.read_int()
         #  For small items it's quicker to read all the data into a string
         #  and parse it in memory than to do lots of small reads from the file.
-        if length < 4096:
+        if length < 4096 and not isinstance(self,StringStream):
             stream = StringStream(self.read(length))
         else:
             stream = self
