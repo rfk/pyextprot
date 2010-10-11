@@ -42,7 +42,7 @@ class TestTypes(unittest.TestCase):
     def test_subclass_fields(self):
         class ActionMovie(movie):
             severity = types.Field(types.Int)
-        self.assertEquals(len(ActionMovie._types),4)
+        self.assertEquals(len(ActionMovie._ep_types),4)
         m1 = ActionMovie(1,"Terminator",["Arnie","Linda"],7)
         self.assertEquals(m1.title,"Terminator")
         self.assertEquals(m1.severity,7)

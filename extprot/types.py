@@ -31,7 +31,11 @@ import struct
 from itertools import izip
 
 from extprot.errors import *
-from extprot.stream import Stream, StringStream
+from extprot.utils import TypedList, TypedDict
+from extprot.stream import Stream, StringStream, TYPE_VINT, TYPE_BITS8, \
+                           TYPE_BITS32, TYPE_BITS64_LONG, TYPE_BITS64_FLOAT, \
+                           TYPE_ENUM, TYPE_TUPLE, TYPE_BYTES, TYPE_HTUPLE, \
+                           TYPE_ASSOC
 
 
 def _issubclass(cls,bases):
@@ -49,43 +53,48 @@ class Type(object):
     generally won't want to instantiate them directly, but they have these
     interesting class-level methods:
 
-        convert:      convert a python value to standard type representation
-        default:      get the default value for type, if any
-        from_stream:  parse value from an extprot bytestream
-        to_stream:    write value to an extprot bytestream
+        _ep_convert:        convert a python value to standard type repr
+        _ep_default:        get the default value for type, if any
+        _ep_parse:          convert from primitive value to standard repr
+        _ep_render:         convert from standard repr to primitive value
+        _ep_get_primtype:   primitive type to use for serialising value
+        _ep_from_primtype:  typeclass to use for deserialising given type
+        _ep_tag:            tag number for disjoint union members
+        _ep_types:          tuple of types from which type is composed
 
-    If the type is composed from other types, the class attribute '_types'
+    If the type is composed from other types, the class attribute '_ep_types'
     will contain them as a tuple.  If the type is polymorphic, the class
-    attribute '_unbound_types' will contain a tupe of instances of the
+    attribute '_ep_unbound_types' will contain a tupe of instances of the
     special type 'Unbound'.  These unbound types can later be instantiated
     using the 'bind' function from this module.
     """
 
-    _types = ()
-    _unbound_types = ()
+    _ep_tag = 0
+    _ep_types = ()
+    _ep_unbound_types = ()
 
     @classmethod
-    def convert(cls,value):
+    def _ep_convert(cls,value):
         """Convert a python value into internal representation."""
         return value
 
     @classmethod
-    def _convert_types(cls,values,types=None):
+    def _ep_convert_types(cls,values,types=None):
         """Convert a sequence of values using a type tuple.
 
-        If no type tuple is given, cls._types is used.  If there aren't
+        If no type tuple is given, cls._ep_types is used.  If there aren't
         enough values for the number of types, we try to use default values.
         """
         values = iter(values)
         if types is None:
-            types = cls._types
+            types = cls._ep_types
         for t in types:
             try:
                 v = values.next()
             except StopIteration:
-                yield t.default()
+                yield t._ep_default()
             else:
-                yield t.convert(v)
+                yield t._ep_convert(v)
         try:
             values.next()
         except StopIteration:
@@ -94,35 +103,50 @@ class Type(object):
             raise ValueError("too many values to convert")
 
     @classmethod
-    def default(cls):
+    def _ep_default(cls):
         """Return the default value for this type."""
         raise UndefinedDefaultError
+
+    @classmethod
+    def _ep_parse(cls,value):
+        return value
+
+    @classmethod
+    def _ep_render(cls,value):
+        return value
+
+    @classmethod
+    def _ep_get_primtype(cls,value):
+        raise NotImplementedError
+
+    @classmethod
+    def _ep_from_primtype(cls,type,tag):
+        if type != cls._ep_get_primtype(None)[1]:
+            raise UnexpectedWireTypeError
+        return cls
 
     @classmethod
     def build(cls,*types):
         """Build an instance of this type using the given subtypes."""
         class Anon(cls):
-            _types = types
+            _ep_types = types
         return Anon
 
     @classmethod
-    def from_stream(cls,stream,prefix=None):
+    def from_stream(cls,stream):
         """Parse a value of this type from an extprot bytestream."""
-        raise NotImplementedError
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        """Write a value for this type to an extprot bytestream."""
-        raise NotImplementedError
+        return stream.read_value(cls)
 
     @classmethod
     def from_string(cls,string):
+        """Read a value of this type from a string."""
         s = StringStream(string)
         return cls.from_stream(s)
 
     @classmethod
     def from_file(cls,file):
-        s = Stream(file)
+        """Read a value of this type from a file-like object."""
+        s = Stream.make_stream(file)
         return cls.from_stream(s)
 
     def __eq__(self,other):
@@ -136,25 +160,26 @@ class Bool(Type):
     """Primitive boolean type."""
 
     @classmethod
-    def convert(cls,value):
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_BITS8
+
+    @classmethod
+    def _ep_convert(cls,value):
         return bool(value)
 
     @classmethod
-    def default(cls):
+    def _ep_default(cls):
         return False
 
     @classmethod
-    def from_stream(cls,stream,prefix=None):
-        byte = stream.read_Bits8(prefix=prefix)
-        return (byte != "\x00")
+    def _ep_parse(cls,value):
+        return (value != "\x00")
 
     @classmethod
-    def to_stream(cls,value,stream):
+    def _ep_render(cls,value):
         if value:
-            byte = "\x01"
-        else:
-            byte = "\x00"
-        stream.write_Bits8(byte)
+            return "\x01"
+        return "\x00"
 
 
 class Byte(Type):
@@ -164,7 +189,11 @@ class Byte(Type):
     """
 
     @classmethod
-    def convert(cls,value):
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_BITS8
+
+    @classmethod
+    def _ep_convert(cls,value):
         try:
             return chr(value)
         except TypeError:
@@ -174,104 +203,88 @@ class Byte(Type):
                 raise ValueError("not a valid Byte: " + value)
             return value
 
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        return stream.read_Bits8(prefix=prefix)
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        stream.write_Bits8(value)
-
 
 class Int(Type):
     """Primitive signed integer type."""
 
+    @classmethod
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_VINT
+
     @classmethod 
-    def convert(cls,value):
+    def _ep_convert(cls,value):
         if not isinstance(value,(int,long)):
             raise ValueError("not a valid Int: " + repr(value))
         return value
 
     @classmethod
-    def from_stream(cls,stream,prefix=None):
-        n = stream.read_Vint(prefix=prefix)
-        if n % 2 == 0:
-            return n // 2
+    def _ep_parse(cls,value):
+        if value % 2 == 0:
+            return value // 2
         else:
-            return n // -2
+            return value // -2
 
     @classmethod
-    def to_stream(cls,value,stream):
+    def _ep_render(cls,value):
         if value >= 0:
-            stream.write_Vint(value*2)
+            return value * 2
         else:
-            stream.write_Vint(value*-2 - 1)
+            return (value * -2) - 1
 
 
 class Long(Type):
     """Primitive 64-bit integer type."""
 
-    _max_long = 2**64
+    _ep_max_long = 2**64
 
     @classmethod
-    def convert(cls,value):
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_BITS64_LONG
+
+    @classmethod
+    def _ep_convert(cls,value):
         packed = int(value)
-        if packed > self._max_long:
+        if packed > self._ep_max_long:
             raise ValueError("too big for a long: " + repr(packed))
 
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        return stream.read_Bits64_long(prefix=prefix)
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        stream.write_Bits64_long(value)
 
 
 class Float(Type):
     """Primitive 64-bit float type."""
 
     @classmethod
-    def convert(cls,value):
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_BITS64_FLOAT
+
+    @classmethod
+    def _ep_convert(cls,value):
         # TODO: a better way to convert/check float types?
         try:
             return struct.unpack("<d",struct.pack("<d",value))[0]
         except struct.error:
             raise ValueError("not a Float")
 
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        return stream.read_Bits64_float(prefix=prefix)
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        stream.write_Bits64_float(value)
-
 
 class String(Type):
     """Primitive byte-string type."""
 
     @classmethod
-    def convert(cls,value):
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_BYTES
+
+    @classmethod
+    def _ep_convert(cls,value):
         if isinstance(value,unicode):
             value = value.encode("ascii")
-        if not isinstance(value,str):
+        elif not isinstance(value,str):
             raise ValueError("not a valid String: " + repr(value))
         return value
-
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        return stream.read_Bytes(prefix=prefix)
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        stream.write_Bytes(value)
 
 
 class Tuple(Type):
     """Composed tuple type.
 
-    Sublcasses of Tuple represent tuples typed according to cls._types.
+    Sublcasses of Tuple represent tuples typed according to cls._ep_types.
     To dynamically build a particular tuple type use the 'build' method
     like so:
 
@@ -281,140 +294,23 @@ class Tuple(Type):
     """
 
     @classmethod
-    def convert(cls,value):
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_TUPLE
+
+    @classmethod
+    def _ep_convert(cls,value):
         try:
-            values = iter(value)
+            return tuple(cls._ep_convert_types(value))
         except TypeError:
             raise ValueError("not a valid Tuple")
-        return tuple(cls._convert_types(values))
 
     @classmethod
-    def default(cls):
-        return tuple(t.default() for t in self._types)
-
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        if prefix is None:
-            prefix = stream.read_prefix()
-        try:
-            stream.check_prefix_type(prefix,stream.TYPE_TUPLE)
-        except UnexpectedWireTypeError:
-            #  Try to promote it from a primitive type to the first
-            #  item in the tuple
-            err = "could not promote primitive to Tuple type"
-            if not cls._types:
-                raise ParseError(err)
-            else:
-                return (cls._types[0].from_stream(stream,prefix=prefix),)
-        else:
-            stream.read_int()  # length is ignored
-            nelems = stream.read_int()
-            values = []
-            for t in cls._types[:nelems]:
-                values.append(t.from_stream(stream))
-            for _ in xrange(max(0,nelems - len(cls._types))):
-                stream.skip_value()
-            return cls._convert_types(values)
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        values = ((t.to_stream,v) for (t,v) in izip(cls._types,value))
-        stream.write_Tuple(0,values)
+    def _ep_default(cls):
+        return tuple(t.default() for t in self._ep_types)
 
 
-class _TypedList(list):
-    """Subclass of built-in list type that contains type-checked values.
 
-    Instances of _TypedList are the canonical internal representation
-    for the List and Array extprot types.
-    """
-
-    def __init__(self,type,items=()):
-        self._type = type
-        items = (self._type.convert(i) for i in items)
-        super(_TypedList,self).__init__(items)
-
-    def _store(self,value):
-        return self._type.convert(value)
-
-    def __setitem__(self,key,value):
-        if isinstance(key,slice):
-            value = (self._store(v) for v in value)
-        else:
-            value = self._store(value)
-        super(_TypedList,self).__setitem__(key,value)
-
-    def __setslice__(self,i,j,sequence):
-        values = (self._store(v) for v in sequence)
-        super(_TypedList,self).__setslice__(i,j,values)
-
-    def __contains__(self,value):
-        value = self._store(value)
-        return super(_TypedList,self).__contains__(value)
-
-    def __iter__(self):
-        for i in xrange(len(self)):
-            yield self[i]
-
-    def append(self,item):
-        return super(_TypedList,self).append(self._store(item))
-
-    def index(self,value,start=None,stop=None):
-        return super(_TypedList,self).index(self._store(item),start,stop)
-
-    def extend(self,iterable):
-        items = (self._store(i) for i in iterable)
-        return super(_TypedList,self).extend(items)
-
-    def insert(self,index,object):
-        return super(_TypedList,self).insert(index,self._store(object))
-
-    def remove(self,value):
-        return super(_TypedList,self).remove(self._store(value))
-
-    def __iadd__(self,other):
-        return super(_TypedList,self).__iadd__(_TypedList(self._type,other))
-
-
-class _List(Type):
-    """Base class for list-like composed types.
-
-    This private class provides the shared implementation for the List
-    and Array types.
-    """
-
-    @classmethod
-    def convert(cls,value):
-        try:
-            return _TypedList(cls._types[0], value)
-        except TypeError:
-            raise ValueError("not a valid List")
-
-    @classmethod
-    def default(cls):
-        return _TypedList(cls._types[0])
-
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        if prefix is None:
-            prefix = stream.read_prefix(stream.TYPE_HTUPLE)
-        else:
-            stream.check_prefix_type(prefix,stream.TYPE_HTUPLE)
-        stream.read_int() # length is ignored
-        nelems = stream.read_int()
-        values = _TypedList(cls._types[0])
-        for _ in xrange(nelems):
-            values.append(cls._types[0].from_stream(stream))
-        return values
-
-    @classmethod
-    def to_stream(cls,value,stream):
-        write = cls._types[0].to_stream
-        values = ((write,v) for v in value)
-        stream.write_HTuple(0,values)
-
-
-class List(_List):
+class List(Type):
     """Composed homogeneous list type.
 
     To dynamically construct a particular list type, use the 'build' method
@@ -424,11 +320,25 @@ class List(_List):
         list_of_2ints = List.build(Tuple.build(Int,Int))
 
     """
-    pass
+
+    @classmethod
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_HTUPLE
+
+    @classmethod
+    def _ep_convert(cls,value):
+        try:
+            return TypedList(cls._ep_types[0], value)
+        except TypeError:
+            raise ValueError("not a valid List")
+
+    @classmethod
+    def _ep_default(cls):
+        return TypedList(cls._ep_types[0])
 
 
-class Array(_List):
-    """Compposed homogeneous array type.
+class Array(Type):
+    """Composed homogeneous array type.
 
     To dynamically construct a particular array type, use the 'build' method
     like so:
@@ -437,25 +347,40 @@ class Array(_List):
         array_of_2ints = Array.build(Tuple.build(Int,Int))
 
     """
-    pass
+
+    @classmethod
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_HTUPLE
+
+    @classmethod
+    def _ep_convert(cls,value):
+        try:
+            return TypedList(cls._ep_types[0], value)
+        except TypeError:
+            raise ValueError("not a valid List")
+
+    @classmethod
+    def _ep_default(cls):
+        return TypedList(cls._ep_types[0])
+
 
 
 class _UnionMetaclass(type):
     """Metaclass for Union type.
 
-    This metaclass is responsible for populating Union._type with a tuple
-    of the declared option types, and Union._option_from_prefix to a mapping
-    from extprot encoded prefixes to individual Option classes.
+    This metaclass is responsible for populating Union._ep_types with a tuple
+    of the declared option types, and Union._ep_tag_map with a mapping from
+    (type,tag) values to individual Option or Message type classes.
     """
 
     def __new__(mcls,name,bases,attrs):
         cls = super(_UnionMetaclass,mcls).__new__(mcls,name,bases,attrs)
         #  Find all attributes that are Option or Message classes, and
-        #  sort them into cls._types tuple.
+        #  sort them into cls._ep_types tuple.
         #  TODO: what about subclasses of a Union subclass that declare
         #        additional options?  Fortunately I don't think the parser
         #        will ever generate such a structure.
-        if "_types" not in attrs:
+        if "_ep_types" not in attrs:
             types = []
             is_message_union = False
             is_option_union = False
@@ -464,25 +389,26 @@ class _UnionMetaclass(type):
                     if is_message_union:
                        raise TypeError("cant union Option and Message")
                     is_option_union = True
-                    types.append((val._creation_order,val))
+                    types.append((val._ep_creation_order,val))
                 elif _issubclass(val,Message):
                     if is_option_union:
                         raise TypeError("cant union Option and Message")
                     is_message_union = True
-                    types.append((val._creation_order,val))
+                    types.append((val._ep_creation_order,val))
                 elif _issubclass(val,Type) or isinstance(val,Type):
                     raise TypeError("only Option and Message allowed in Union")
             types.sort()
-            cls._types = tuple(t for (_,t) in types)
-            #  Label each with their index in the union
+            cls._ep_types = tuple(t for (_,t) in types)
+            #  Label each with their tag in the union.
+            #  The tag space for enums and tuple options is distinct.
             e_idx = 0
             t_idx = 0
-            for t in cls._types:
-                if _issubclass(t,Option) and not t._types:
-                    t._index = e_idx
+            for t in cls._ep_types:
+                if _issubclass(t,Option) and not t._ep_types:
+                    t._ep_tag = e_idx
                     e_idx += 1
                 else:
-                    t._index = t_idx
+                    t._ep_tag = t_idx
                     t_idx += 1
                 #  Adjust __name__ and __module__ to allow pickling
                 if _issubclass(t,Message):
@@ -490,32 +416,29 @@ class _UnionMetaclass(type):
                     if getattr(mod,t.__name__,None) is not t:
                         t.__name__ = cls.__name__+"."+t.__name__
                         t.__module__ = cls.__module__
-        cls._option_from_prefix = {}
-        for t in cls._types:
-            # TODO: delegate this formatting to the stream somehow?
-            #       A bit tricky when we don't have one yet.
-            if _issubclass(t,Option) and not t._types:
-                prefix = ((t._index << 4) | 10)
-            else:
-                prefix = ((t._index << 4) | 1)
-            cls._option_from_prefix[prefix] = t
+        cls._ep_tag_map = {}
+        for t in cls._ep_types:
+            cls._ep_tag_map[(t._ep_get_primtype(None)[1],t._ep_tag)] = t
         return cls
 
 
 class _OptionMetaclass(type):
     """Metaclass for Option type.
 
-    This metaclass is responsible for populating Option._creation_order with
+    This metaclass is responsible for populating Option._ep_creation_order with
     an increasing number indicating the order in which subclasses were created.
     """
 
-    _creation_counter = 0
+    _ep_creation_counter = 0
 
     def __new__(mcls,name,bases,attrs):
         cls = super(_OptionMetaclass,mcls).__new__(mcls,name,bases,attrs)
-        cls._creation_order = mcls._creation_counter
-        mcls._creation_counter += 1
+        cls._ep_creation_order = mcls._ep_creation_counter
+        mcls._ep_creation_counter += 1
         return cls
+
+    def __len__(self):
+        return 0
 
 
 class Option(Type):
@@ -529,13 +452,19 @@ class Option(Type):
 
     __metaclass__ = _OptionMetaclass
 
+    @classmethod
+    def _ep_get_primtype(cls,value):
+        if not cls._ep_types:
+            return cls,TYPE_ENUM
+        return cls,TYPE_TUPLE
+
     def __new__(cls,*values):
         """Custom instance constructor to special-case constant options.
 
         For Option subclasses that don't contain any values, this returns the
         class itself rather than an instance.
         """
-        if not cls._types:
+        if not cls._ep_types:
             if values:
                 raise ValueError("values given to constant Option constructor")
             return cls
@@ -543,23 +472,26 @@ class Option(Type):
             return Type.__new__(cls)
 
     def __init__(self,*values):
-        self._values = tuple(self._convert_types(values))
+        self._ep_values = tuple(self._ep_convert_types(values))
 
     def __getitem__(self,index):
-        return self._values[index]
+        return self._ep_values[index]
 
     def __setitem__(self,index,value):
-        self._values[index] = self._types[index].convert(value)
+        self._ep_values[index] = self._ep_types[index]._ep_convert(value)
+
+    def __len__(self):
+        return len(self._ep_values)
 
     def __eq__(self,other):
-        return self._values == other._values
+        return self._ep_values == other._ep_values
 
     @classmethod
-    def convert(cls,value):
+    def _ep_convert(cls,value):
         if isinstance(value,cls):
             return value
         if _issubclass(value,cls):
-            if value._types:
+            if value._ep_types:
                 raise ValueError("no data given to non-constant Option")
             return value
         #  To support easy syntax for polymorphic union types, we also
@@ -567,13 +499,13 @@ class Option(Type):
         #  have a compatible type signature.
         if isinstance(value,Option):
             if value.__class__ in cls.__mro__:
-                return cls(*value._values)
-            if unify_types(cls._types,value.__class__._types) is not None:
-                return cls(*value._values)
+                return cls(*value._ep_values)
+            if unify_types(cls._ep_types,value.__class__._ep_types) is not None:
+                return cls(*value._ep_values)
         elif _issubclass(value,Option):
-            if value._types:
+            if value._ep_types:
                 raise ValueError("no data given to non-constant Option")
-            if not cls._types and value  in cls.__mro__:
+            if not cls._ep_types and value  in cls.__mro__:
                 return cls
         #  Not an Option class or instance, must be a direct value tuple.
         #  A scalar is converted into a tuple of length 1.
@@ -586,32 +518,7 @@ class Option(Type):
                 value = (value,)
         return cls(*value)
 
-    @classmethod
-    def from_stream(cls,stream,prefix=None):
-        if prefix is None:
-            prefix = stream.read_prefix()
-        # Nothing to read for Enum options
-        if not cls._types:
-            return cls
-        stream.read_int() # length is ignored
-        nelems = stream.read_int()
-        values = []
-        for t in cls._types[:nelems]:
-            values.append(t.from_stream(stream))
-        for _ in xrange(max(0,nelems - len(cls._types))):
-            stream.skip_value()
-        return cls(*list(cls._convert_types(values)))
 
-    @classmethod
-    def to_stream(cls,value,stream,types=None):
-        if types is None:
-            types = cls._types
-        if not types:
-            stream.write_Enum(cls._index)
-        else:
-            values = ((t.to_stream,v) for (t,v) in zip(types,value))
-            stream.write_Tuple(cls._index,values)
-        
 
 class Field(Type):
     """Type representing a field on a Message.
@@ -625,81 +532,100 @@ class Field(Type):
             contents = Field(List.build(String),mutable=True)
 
     Through some metaclass magic on the Message class, Field instances come
-    to know the name (self._name) and index (self._index) by which they are
-    attached to a message.
+    to know the name (self._ep_name) and index (self._ep_index) by which they
+    are attached to a message.
     """
 
-    _creation_counter = 0
+    _ep_creation_counter = 0
 
     def __init__(self,type,mutable=False):
-        self._creation_order = Field._creation_counter
-        Field._creation_counter += 1
-        self._types = (type,)
+        self._ep_creation_order = Field._ep_creation_counter
+        Field._ep_creation_counter += 1
+        self._ep_type = type
         self.mutable = mutable
 
     def __get__(self,obj,type=None):
+        if obj is None:
+            return self
         try:
-            value = obj.__dict__[self._name]
+            value = obj.__dict__[self._ep_name]
         except KeyError:
-            value = self._types[0].default()
-            obj.__dict__[self._name] = value
+            value = self._ep_type._ep_default()
+            obj.__dict__[self._ep_name] = value
         return value
 
     def __set__(self,obj,value):
-        if not self.mutable and obj._initialized:
-            raise AttributeError("Field '"+self._name+"' is not mutable")
+        if not self.mutable and obj._ep_initialized:
+            raise AttributeError("Field '"+self._ep_name+"' is not mutable")
         if value is None:
             try:
-                value = self._types[0].default()
+                value = self._ep_type._ep_default()
             except UndefinedDefaultError:
-                msg = "value required for field " + self._name
+                msg = "value required for field " + self._ep_name
                 raise UndefinedDefaultError(msg)
-        obj.__dict__[self._name] = self._types[0].convert(value)
+        obj.__dict__[self._ep_name] = self._ep_type._ep_convert(value)
 
-    def from_stream(self,stream,prefix=None):
-        return self._types[0].from_stream(stream,prefix=prefix)
+    def _ep_convert(self):
+        return self._ep_type._ep_convert()
 
-    def to_stream(self,value,stream):
-        return self._types[0].to_stream(value,stream)
+    def _ep_default(self):
+        return self._ep_type._ep_default()
+
+    def _ep_parse(self,value):
+        return self._ep_type._ep_parse(value)
+
+    def _ep_render(self,value):
+        return self._ep_type._ep_render(value)
+
+    def _ep_get_primtype(self,value):
+        return self._ep_type._ep_get_primtype(value)
+
+    def _ep_from_primtype(self,type,tag):
+        return self._ep_type._ep_from_primtype(type,tag)
+
+    @property
+    def _ep_types(self):
+        return self._ep_type._ep_types
 
 
 class _MessageMetaclass(type):
     """Metaclass for message type.
 
-    This metaclass is responsible for populating Message._creation_order with
-    an increasing number indicating the order in which subclasses were created,
-    setting the _name and _index properties on contained Field instances,
-    and creating cls._types as a tuple of contained fields.
+    This metaclass is responsible for populating Message._ep_creation_order
+    with an increasing number indicating the order in which subclasses were
+    created, setting the _ep_name and _ep_index properties on contained Field
+    instances, and creating cls._ep_types as a tuple of contained fields.
     """
 
-    _creation_counter = 0
+    _ep_creation_counter = 0
 
     def __new__(mcls,name,bases,attrs):
         cls = super(_MessageMetaclass,mcls).__new__(mcls,name,bases,attrs)
-        cls._creation_order = mcls._creation_counter
-        mcls._creation_counter += 1
+        cls._ep_creation_order = mcls._ep_creation_counter
+        mcls._ep_creation_counter += 1
         #  Find all attributes that are Field instances, sort in creation order.
         types = []
         names = {}
         for (name,val) in attrs.iteritems():
             if isinstance(val,Field):
-                types.append((val._creation_order,name,val))
+                types.append((val._ep_creation_order,name,val))
                 names[name] = True
         types.sort()
         #  Find all base Field instances that haven't been overridden.
         btypes = []
         for base in bases:
             if issubclass(base,Message):
-                for t in base._types:
-                    if t._name not in names:
+                for t in base._ep_types:
+                    if t._ep_name not in names:
                         btypes.append(t)
-                        names[t._name] = True
+                        names[t._ep_name] = True
         #  Merge types and base_types into the final types tuple.
-        cls._types = tuple(t for t in btypes) + tuple(t for (_,_,t) in types)
+        cls._ep_types = tuple(t for t in btypes)
+        cls._ep_types = cls._ep_types + tuple(t for (_,_,t) in types)
         #  Label each field with its name and index in the message
         for (i,(_,nm,t)) in enumerate(types):
-            t._index = i + len(btypes)
-            t._name = nm
+            t._ep_index = i + len(btypes)
+            t._ep_name = nm
         return cls
 
 
@@ -707,7 +633,9 @@ class Message(Type):
     """Fake composed message type.
 
     This class exists only to fake out the _MessageMetaclass logic while
-    the real Message class is being created.
+    the real Message class is being created.  _MessageMetaclass checks
+    for things that are subclasses of Message, which it obviously can't
+    do for the Message class itself.
     """
     pass
 
@@ -721,34 +649,30 @@ class Message(Type):
 
     __metaclass__ = _MessageMetaclass
 
-    #  Messages can be part of a Union, giving them a specific index.
-    #  Stand-alone messages always have an index of zero.
-    _index = 0
+    @classmethod
+    def _ep_get_primtype(cls,value):
+        return cls,TYPE_TUPLE
 
     def __init__(self,*args,**kwds):
-        self._initialized = False
+        self._ep_initialized = False
         #  Process positional and keyword arguments as Field values
-        if len(args) > len(self._types):
+        if len(args) > len(self._ep_types):
             raise TypeError("too many positional arguments to Message")
-        for (t,v) in zip(self._types,args):
+        for (t,v) in zip(self._ep_types,args):
             t.__set__(self,v)
-        for t in self._types[len(args):]:
+        for t in self._ep_types[len(args):]:
             try:
-                v = kwds.pop(t._name)
+                v = kwds.pop(t._ep_name)
             except KeyError:
                 t.__set__(self,None)
             else:
                 t.__set__(self,v)
         if kwds:
             raise TypeError("too many keyword arguments to Message")
-        self._initialized = True
-        #  Allow calling to_stream() on Message instances.
-        def my_to_stream(stream):
-            self.__class__.to_stream(self,stream)
-        self.to_stream = my_to_stream
+        self._ep_initialized = True
 
     @classmethod
-    def convert(cls,value):
+    def _ep_convert(cls,value):
         if isinstance(value,cls):
             return value
         if isinstance(value,Message):
@@ -762,47 +686,35 @@ class Message(Type):
             return cls(**value)
 
     @classmethod
-    def default(cls):
+    def _ep_default(cls):
         return cls()
 
     @classmethod
-    def from_stream(cls,stream,prefix=None):
-        if prefix is None:
-            prefix = stream.read_prefix(stream.TYPE_TUPLE)
-        else:
-            stream.check_prefix_type(prefix,stream.TYPE_TUPLE)
-        stream.read_int()  # length is ignored
-        nelems = stream.read_int()
-        values = []
-        for t in cls._types[:nelems]:
-            values.append(t.from_stream(stream))
-        for _ in xrange(max(0,nelems - len(cls._types))):
-            stream.skip_value()
-        # default values are handled by Message.__init__
-        return cls(*values)
+    def _ep_parse(cls,value):
+        return cls(*value)
 
     @classmethod
-    def to_stream(cls,value,stream):
-        values = ((t.to_stream,value.__dict__[t._name]) for t in cls._types)
-        stream.write_Tuple(value._index,values)
+    def _ep_render(cls,value):
+        return [value.__dict__[t._ep_name] for t in cls._ep_types]
+
+    def to_stream(self,stream):
+        """Serialize this message to an extprot bytestream."""
+        stream.write_value(self.__class__,self)
 
     def to_string(self):
+        """Serialize this message to a string."""
         s = StringStream()
         self.to_stream(s)
         return s.getstring()
 
     def to_file(self,file):
-        self.to_stream(Stream(file))
-
-    @classmethod
-    def from_string(cls,string):
-        s = StringStream(string)
-        return cls.from_stream(s)
+        """Serialize this message to a file-like object."""
+        self.to_stream(Stream.make_stream(file))
 
     def __eq__(self,msg):
         if self.__class__ != msg.__class__:
             return False
-        for t in self._types:
+        for t in self._ep_types:
             if t.__get__(self) != t.__get__(msg):
                 return False
         return True
@@ -822,7 +734,7 @@ class Message(Type):
 
 
 def _unpickle_message(module,name,data):
-    """Helper function for unpickled of Message insances."""
+    """Helper function for unpickling of Message insances."""
     mname = module.split(".")[-1]
     cls = __import__(module,fromlist=[mname])
     for nm in name.split("."):
@@ -844,12 +756,13 @@ class Union(Type):
 
         class stuff(Union):
             class Watzit(Option):
-                _types = ()
+                _ep_types = ()
             class Thing(Option):
-                _types = (String,Int)
+                _ep_types = (String,Int)
 
-    Through some metaclass magic, stuff._types will come to contain the
+    Through some metaclass magic, stuff._ep_types will come to contain the
     declared option types, in the order they were declared.
+
     To name instances of this type in code you use standard dotted notation:
 
         stuff1 = stuff.Watzit           # a contant option
@@ -867,65 +780,50 @@ class Union(Type):
     __metaclass__ = _UnionMetaclass
 
     @classmethod
-    def convert(cls,value):
-        for t in cls._types:
+    def _ep_convert(cls,value):
+        for t in cls._ep_types:
             try:
-                v = t.convert(value)
+                v = t._ep_convert(value)
                 return v
             except ValueError, e:
                 pass
         raise ValueError("could not convert value " + repr(value) + " to Union type " + repr(cls))
 
     @classmethod
-    def default(cls):
-        for t in cls._types:
+    def _ep_default(cls):
+        for t in cls._ep_types:
             if _issubclass(t,Message):
-                return t.default()
-            if not t._types:
+                return t._ep_default()
+            if not t._ep_types:
                 return t
         raise UndefinedDefaultError
 
     @classmethod
-    def from_stream(cls,stream,prefix=None):
-        if prefix is None:
-            prefix = stream.read_prefix()
-        try:
-            opt = cls._option_from_prefix[prefix]
-        except KeyError:
-            #  Try to promote it from a primitive type to the first
-            #  non-constant option in this union.
-            err = "could not promote primitive to Union type"
-            for opt in cls._types:
-                if opt._types:
-                    return opt(opt._types[0].from_stream(stream,prefix=prefix))
-            else:
-                raise ParseError(err)
-        else:
-            return opt.from_stream(stream,prefix=prefix)
+    def _ep_get_primtype(cls,value):
+        return value._ep_get_primtype(value)
 
     @classmethod
-    def to_stream(cls,value,stream):
-        if isinstance(value,Message):
-            vcls = value.__class__
-        else:
-            vcls = value
-        vcls.to_stream(value,stream)
+    def _ep_from_primtype(cls,type,tag):
+        try:
+            return cls._ep_tag_map[(type,tag)]
+        except KeyError:
+            raise UnexpectedWireTypeError
 
    
 class Unbound(Type):
     """Unbound type, for representing type parameters.
 
-    Attempts to use this class in serialization raise errors.  Its intended
+    Attempts to use this class in serialization raise errors.  It's intended
     use is for individual instances to represent types that are not yet bound
-    in polymorphic type declaration (i.e. to appear in cls._unbound_types).
+    in polymorphic type declaration (i.e. to appear in cls._ep_unbound_types).
     """
 
     @classmethod
-    def from_stream(self,stream,prefix=None):
+    def _ep_parse(self,value):
         raise TypeError("parametric type not bound")
 
     @classmethod
-    def to_stream(self,value,stream):
+    def _ep_render(self,value):
         raise TypeError("parametric type not bound")
 
    
@@ -941,28 +839,28 @@ class Placeholder(Type):
         self.name = name
 
     @classmethod
-    def from_stream(self,stream,prefix=None):
+    def _ep_parse(self,value):
         raise TypeError("parametric type not bound")
 
     @classmethod
-    def to_stream(self,value,stream):
+    def _ep_render(self,value):
         raise TypeError("parametric type not bound")
 
 
 def bind(ptype,*ctypes):
     """Dynamically bind unbound type parameters to create a new type class.
 
-    Given a type class with Unbound instances in ptype._unbound_types, this
+    Given a type class with Unbound instances in ptype._ep_unbound_types, this
     function will create a new subclass of that type with the unbound types
     replaced by those specified in ctypes.
     """
-    ubtypes = ptype._unbound_types
+    ubtypes = ptype._ep_unbound_types
     if len(ctypes) > len(ubtypes):
         raise TypeError("too many type parameters")
     tpairs = zip(ubtypes,ctypes)
     btype = _bind_rec(ptype,tpairs)
     if btype is not ptype:
-        setattr(btype,"_unbound_types",ubtypes[len(ctypes):])
+        setattr(btype,"_ep_unbound_types",ubtypes[len(ctypes):])
     return btype
 
 
@@ -981,20 +879,20 @@ def _bind_rec(ptype,tpairs):
                 return bt
         return ptype
     #  Primitive types can't have replacement performed
-    if not ptype._types:
+    if not ptype._ep_types:
         return ptype
     #  Check whether replacement actually occurs, recursively
-    types = tuple(_bind_rec(t,tpairs) for t in ptype._types)
-    if types == ptype._types:
+    types = tuple(_bind_rec(t,tpairs) for t in ptype._ep_types)
+    if types == ptype._ep_types:
         return ptype
     #  Create the bound subclass
     class btype(ptype):
-        _types = types
+        _ep_types = types
     #  If any attributes of ptype are types that have been modified,
     #  update the attributes of btype to match.
     for nm in dir(ptype):
         val = getattr(ptype,nm) 
-        for (i,t) in enumerate(ptype._types):
+        for (i,t) in enumerate(ptype._ep_types):
             if val is t:
                 setattr(btype,nm,types[i])
                 break
@@ -1040,11 +938,11 @@ def _unify_types_rec(type1,type2,pairs):
             return None
         if _unify_types_rec(type1.__class__,type2.__class__,pairs) is None:
             return None
-        if type1._types is not type1.__class__._types:
-            if _unify_types_rec(type1._types,type2._types,pairs) is None:
+        if type1._ep_types is not type1.__class__._ep_types:
+            if _unify_types_rec(type1._ep_types,type2._ep_types,pairs) is None:
                 return None
-        elif type2._types is not type2.__class__._types:
-            if _unify_types_rec(type1._types,type2._types,pairs) is None:
+        elif type2._ep_types is not type2.__class__._ep_types:
+            if _unify_types_rec(type1._ep_types,type2._ep_types,pairs) is None:
                 return None
         return pairs
     if isinstance(type2,Type):
@@ -1056,7 +954,7 @@ def _unify_types_rec(type1,type2,pairs):
             return None
         if type1 not in type2.__mro__ and type2 not in type1.__mro__:
             return None
-        return _unify_types_rec(type1._types,type2._types,pairs)
+        return _unify_types_rec(type1._ep_types,type2._ep_types,pairs)
     if _issubclass(type2,Type):
         return None
     #  Handle tuples of types.
@@ -1083,7 +981,22 @@ def resolve_placeholders(type):
  
     """
     new_types = []
-    for t2 in type._types:
+    try:
+        t2 = type._ep_type
+    except AttributeError:
+        pass
+    else:
+        if isinstance(t2,Placeholder):
+            result = []
+            def setter(value):
+                result.append(value)
+            yield (t2.name,setter)
+            if result:
+                type._ep_type = result[0]
+        else:
+            for sub in resolve_placeholders(t2):
+                yield sub
+    for t2 in type._ep_types:
         if isinstance(t2,Placeholder):
             result = []
             def setter(value):
@@ -1097,6 +1010,8 @@ def resolve_placeholders(type):
             for sub in resolve_placeholders(t2):
                 yield sub
             new_types.append(t2)
-    type._types = tuple(new_types)
+    new_types = tuple(new_types)
+    if type._ep_types != new_types:
+        type._ep_types = new_types
  
 

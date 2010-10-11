@@ -1,4 +1,25 @@
 
+0.3.0:
+
+This version introduces some backwards-incompatable changes.  You will need to
+recompile any compiled protocol definitions.
+
+    * New serialising/deserialising infrastructure based on Cython.
+        * the compiled version gives a speedup of over TODO on simple tests.
+        * the parsing loop is now driven by the Stream, so Type.to_stream()
+          and Type.from_stream() are gone.
+        * the new methods Type._ep_parse() and  Type._ep_render() can be used
+          by individual types to customise their rendering into primitive
+          protocol types.
+    * All extprot-related metadata is now stored in attributes or methods
+      with the prefix "_ep_".  For example:
+        * Type.convert() is now Type._ep_convert()
+        * Type.default() is now Type._ep_default()
+        * Type._types is now Type._ep_types
+      This should mostly be invisible to end users, unless you were creating
+      custom types or specifying Option types in raw code.
+    * Added extprot.utils, with implementations of TypedList and TypedDict.
+
 0.2.4:
 
     * implement promotion of primitive types to Union and Tuple types.
