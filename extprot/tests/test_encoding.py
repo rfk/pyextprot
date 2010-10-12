@@ -4,7 +4,6 @@
 import unittest
 
 from extprot.types import *
-from extprot.stream import StringStream
 
 
 class a_bool(Message):

@@ -6,11 +6,11 @@ probably need to recompile any compiled protocol definitions.
 
     * New serialising/deserialising infrastructure based on Cython.
         * the compiled version gives a speedup of over TODO on simple tests.
-        * the parsing loop is now driven by the Stream, so Type.to_stream()
-          and Type.from_stream() are gone.
-        * the new methods Type._ep_parse() and  Type._ep_render() can be used
-          by individual types to customise their rendering into primitive
-          protocol types.
+        * the parsing loop is now driven from the inside an calls out to Type
+          classes, rather than Type classes calling into the parser.
+            * extprot.serialize contains the new implementation
+            * extprot.stream has been removed, along with Type.to_stream()
+              and Type.from_stream()
     * With the exception of "_types" and "_unbound_types", all extprot-related
       methods and attributes now have names starting with
       "_ep_".  For example:

@@ -5,7 +5,9 @@
 #  This script is placed in the public domain.
 #
 
+import os
 from distutils.core import setup
+from distutils.extension import Extension
 
 #  Import to allow pertinent info to be extracted
 import extprot
@@ -34,6 +36,13 @@ CLASSIFIERS = [
 PACKAGES = ["extprot","extprot.tests"]
 EXT_MODULES = []
 PKG_DATA = {}
+
+def add_ext_module(nm):
+    path = os.path.join(os.path.dirname(__file__),"extprot",nm+".c")
+    if os.path.exists(path):
+        EXT_MODULES.append(Extension("extprot."+nm,[path]))
+
+add_ext_module("stream")
 
 ##
 ##  Main call to setup() function

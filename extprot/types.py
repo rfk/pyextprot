@@ -32,10 +32,11 @@ from itertools import izip
 
 from extprot.errors import *
 from extprot.utils import TypedList, TypedDict
-from extprot.stream import Stream, StringStream, TYPE_VINT, TYPE_BITS8, \
+from extprot.serialize import from_string, from_file, to_string, to_file, \
+                           TYPE_VINT, TYPE_BITS8, TYPE_ASSOC, \
                            TYPE_BITS32, TYPE_BITS64_LONG, TYPE_BITS64_FLOAT, \
-                           TYPE_ENUM, TYPE_TUPLE, TYPE_BYTES, TYPE_HTUPLE, \
-                           TYPE_ASSOC
+                           TYPE_ENUM, TYPE_TUPLE, TYPE_BYTES, TYPE_HTUPLE
+
 
 
 def _issubclass(cls,bases):
@@ -136,21 +137,14 @@ class Type(object):
         return Anon
 
     @classmethod
-    def from_stream(cls,stream):
-        """Parse a value of this type from an extprot bytestream."""
-        return stream.read_value(cls)
-
-    @classmethod
     def from_string(cls,string):
         """Read a value of this type from a string."""
-        s = StringStream(string)
-        return cls.from_stream(s)
+        return from_string(string,cls)
 
     @classmethod
     def from_file(cls,file):
         """Read a value of this type from a file-like object."""
-        s = Stream.make_stream(file)
-        return cls.from_stream(s)
+        return from_file(file,cls)
 
     def __eq__(self,other):
         return self is other
@@ -723,19 +717,13 @@ class Message(Type):
         value = [value.__dict__[t._ep_name] for t in cls._types]
         return (cls._ep_prim_type,cls._ep_tag,value,cls._types)
 
-    def to_stream(self,stream):
-        """Serialize this message to an extprot bytestream."""
-        stream.write_value(self.__class__,self)
-
     def to_string(self):
         """Serialize this message to a string."""
-        s = StringStream()
-        self.to_stream(s)
-        return s.getstring()
+        return to_string(self,self.__class__)
 
     def to_file(self,file):
         """Serialize this message to a file-like object."""
-        self.to_stream(Stream.make_stream(file))
+        to_file(file,self,self.__class__)
 
     def __eq__(self,msg):
         if self.__class__ != msg.__class__:
