@@ -304,7 +304,7 @@ class Tuple(Type):
     @classmethod
     def _ep_parse(cls,type,tag,value):
         if type == cls._ep_prim_type:
-            return value
+            return tuple(value)
         #  Try to promote it from a primitive type to the first tuple item.
         if not cls._types:
             err = "could not promote primitive to Tuple type"
@@ -312,7 +312,7 @@ class Tuple(Type):
         else:
             items = [cls._types[0]._ep_parse(type,tag,value)]
             items.extend(t._ep_default() for t in cls._types[1:])
-            return items
+            return tuple(items)
 
 
 
@@ -706,6 +706,11 @@ class Message(Type):
     def _ep_parse(cls,type,tag,value):
         if type != cls._ep_prim_type:
             raise UnexpectedWireTypeError
+        # TODO: shoudl I short-cut creation of the new instance?
+        self = cls.__new__(cls)
+        for (t,v) in zip(self._types,value):
+            self.__dict__[t._ep_name] = v
+        return self
         return cls(*value)
 
     @classmethod
