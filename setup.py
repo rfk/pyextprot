@@ -6,6 +6,8 @@
 #
 
 import os
+import sys
+import subprocess
 from distutils.core import setup
 from distutils.extension import Extension
 
@@ -36,6 +38,17 @@ CLASSIFIERS = [
 PACKAGES = ["extprot","extprot.tests"]
 EXT_MODULES = []
 PKG_DATA = {}
+
+#  If building a source distribution, cython-compile necessary modules.
+
+def prep_ext_module(nm):
+    path = os.path.join(os.path.dirname(__file__),"extprot",nm+".py")
+    subprocess.check_call(["cython",path])
+
+if "sdist" in sys.argv:
+    prep_ext_module("serialize")
+
+#  Add the source for cython extension modules if it exists.
 
 def add_ext_module(nm):
     path = os.path.join(os.path.dirname(__file__),"extprot",nm+".c")
