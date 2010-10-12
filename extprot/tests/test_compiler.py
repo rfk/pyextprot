@@ -1,6 +1,7 @@
 
 
 import sys
+import os
 from os import path
 import tempfile
 import unittest
@@ -57,15 +58,18 @@ class TestCompiler(unittest.TestCase):
 
     def test_compile_module(self):
         cfile = extprot.compiler.__file__        
+        if cfile.endswith(".pyc"):
+            cfile = cfile[:-1]
         cmd = [sys.executable,cfile]
         if sys.platform == "win32":
             sep = ";"
         else:
             sep = ":"
-        env = dict(PYTHONPATH=sep.join(sys.path))
-        infile = open(pfile)
-        p = subprocess.Popen(cmd,stdin=infile,stdout=PIPE,stderr=PIPE,env=env)
-        (stdout,stderr) = p.communicate()
+        env = os.environ.copy()
+        env["PYTHONPATH"] = sep.join(sys.path)
+        p = subprocess.Popen(cmd,stdin=PIPE,stdout=PIPE,stderr=PIPE,env=env)
+        with open(pfile,"rt") as fIn:
+            (stdout,stderr) = p.communicate(fIn.read())
         self.assertEquals(stderr,"")
         self.assertTrue("class person(types.Message):" in stdout)
         self.assertTrue("class optional(types.Union):" in stdout)

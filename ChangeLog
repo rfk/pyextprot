@@ -5,9 +5,9 @@ This version introduces some backwards-incompatable changes.  You will
 probably need to recompile any compiled protocol definitions.
 
     * New serialising/deserialising infrastructure based on Cython.
-        * the compiled version gives a speedup of over TODO on simple tests.
-        * the parsing loop is now driven from the inside an calls out to Type
-          classes, rather than Type classes calling into the parser.
+        * the compiled version is now faster than cPickle on simple tests.
+        * the parsing loop is now driven from the inside and calls out to Type
+          classes, rather than having Type classes call into the parser.
             * extprot.serialize contains the new implementation
             * extprot.stream has been removed, along with Type.to_stream()
               and Type.from_stream()

@@ -5,6 +5,7 @@
 import unittest
 from os import path
 import tempfile
+import shutil
 
 import extprot
 from extprot import types
@@ -120,10 +121,13 @@ Test_dynamic = make_cases(**dynamic)
 #  test the to-source-code compilation
 file = path.join(path.dirname(__file__),"../../examples/tst.proto")
 compiled = {}
-modfile = tempfile.NamedTemporaryFile()
-extprot.compile_protocol(open(file),modfile)
-modfile.flush()
-execfile(modfile.name,compiled)
-Test_compiled = make_cases(**compiled)
-modfile.close()
+tdir = tempfile.mkdtemp()
+try:
+    modfile = path.join(tdir,"tst.py")
+    with open(modfile,"wt") as f:
+        extprot.compile_protocol(open(file),f)
+    execfile(modfile,compiled)
+    Test_compiled = make_cases(**compiled)
+finally:
+    shutil.rmtree(tdir)
 

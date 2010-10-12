@@ -42,7 +42,7 @@ def add_ext_module(nm):
     if os.path.exists(path):
         EXT_MODULES.append(Extension("extprot."+nm,[path]))
 
-add_ext_module("stream")
+add_ext_module("serialize")
 
 ##
 ##  Main call to setup() function
