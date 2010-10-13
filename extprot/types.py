@@ -665,24 +665,25 @@ class Message(Type):
     __metaclass__ = _MessageMetaclass
 
     _ep_prim_type = TYPE_TUPLE
+    _ep_initialized = False
 
     def __init__(self,*args,**kwds):
-        self._ep_initialized = False
-        #  Process positional and keyword arguments as Field values
-        if len(args) > len(self._types):
-            raise TypeError("too many positional arguments to Message")
-        for (t,v) in zip(self._types,args):
-            t.__set__(self,v)
-        for t in self._types[len(args):]:
-            try:
-                v = kwds.pop(t._ep_name)
-            except KeyError:
-                t.__set__(self,None)
-            else:
+        if not self._ep_initialized:
+            #  Process positional and keyword arguments as Field values
+            if len(args) > len(self._types):
+                raise TypeError("too many positional arguments to Message")
+            for (t,v) in izip(self._types,args):
                 t.__set__(self,v)
-        if kwds:
-            raise TypeError("too many keyword arguments to Message")
-        self._ep_initialized = True
+            for t in self._types[len(args):]:
+                try:
+                    v = kwds.pop(t._ep_name)
+                except KeyError:
+                    t.__set__(self,None)
+                else:
+                    t.__set__(self,v)
+            if kwds:
+                raise TypeError("too many keyword arguments to Message")
+            self._ep_initialized = True
 
     @classmethod
     def _ep_convert(cls,value):
@@ -706,12 +707,14 @@ class Message(Type):
     def _ep_parse(cls,type,tag,value):
         if type != cls._ep_prim_type:
             raise UnexpectedWireTypeError
-        # TODO: shoudl I short-cut creation of the new instance?
+        #  Bypass typechecking by initialising the values before calling
+        #  __init__.  We already know the types are valid.
         self = cls.__new__(cls)
-        for (t,v) in zip(self._types,value):
+        for (t,v) in izip(self._types,value):
             self.__dict__[t._ep_name] = v
+        self._ep_initialized = True
+        self.__init__(*value)
         return self
-        return cls(*value)
 
     @classmethod
     def _ep_parse_builder(cls,type,tag):
@@ -904,7 +907,7 @@ def bind(ptype,*ctypes):
     ubtypes = ptype._unbound_types
     if len(ctypes) > len(ubtypes):
         raise TypeError("too many type parameters")
-    tpairs = zip(ubtypes,ctypes)
+    tpairs = izip(ubtypes,ctypes)
     btype = _bind_rec(ptype,tpairs)
     if btype is not ptype:
         setattr(btype,"_unbound_types",ubtypes[len(ctypes):])
@@ -1008,7 +1011,7 @@ def _unify_types_rec(type1,type2,pairs):
     #  They must be equal length and matching items must unify
     if len(type1) != len(type2):
         return None
-    for (t1,t2) in zip(type1,type2):
+    for (t1,t2) in izip(type1,type2):
         if _unify_types_rec(t1,t2,pairs) is None:
             return None
     return pairs
