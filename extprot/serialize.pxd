@@ -34,7 +34,7 @@ cdef class _Stream:
     cdef object _read_value(self,typcls)
     cdef void _skip_value(self)
     cdef void _write_value(self,value,typcls)
-    cdef object _read_int(self)
+    cdef object _read_int(self,object x=*)
     cdef void _write_int(self,x)
     cdef long long _read_small_int(self)
     cdef void _write_small_int(self,x)

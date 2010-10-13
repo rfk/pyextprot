@@ -205,8 +205,10 @@ class _Stream(object):
         else:
             raise UnexpectedWireTypeError
 
+    #  Cython 1.3 wants to type x as a long long, despite my best efforts.
+    #  It's an optional argument so I can type it as object in the .pxd file.
     @cython.locals(b=cython.int,e=cython.longlong)
-    def _read_int(self):
+    def _read_int(self,x=0):
         """Read an integer encoded in vint format.""" 
         b = ord(self._read(1))
         if b < 128:
