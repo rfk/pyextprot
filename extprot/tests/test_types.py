@@ -63,5 +63,13 @@ class TestTypes(unittest.TestCase):
         self.assertEquals(oo.is_on,True)
         self.assertEquals(OnOff.from_string(oo.to_string()).is_on,True)
 
+    def test_large_int(self):
+        bignum = 43 ** 72
+        m1 = movie(bignum,"Improbable ID")
+        self.assertEquals(m1.id,bignum)
+        m2 = movie.from_string(m1.to_string())
+        self.assertEquals(m2.id,bignum)
+        self.assertEquals(m1,m2)
+
 
 

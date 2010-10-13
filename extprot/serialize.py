@@ -213,10 +213,14 @@ class _Stream(object):
             return b
         x = e = 0
         while b >= 128:
-            x += (b - 128) << e
+            h = (b - 128)
+            h = h << e
+            x += h
             e += 7
             b = ord(self._read(1))
-        x += (b << e)
+        h = b
+        h = h << e
+        x += h
         return x
 
     @cython.locals(b=cython.int,e=cython.longlong,x=cython.longlong)
@@ -237,7 +241,7 @@ class _Stream(object):
         x += (b << e)
         return x
 
-    @cython.locals(b=cython.short)
+    @cython.locals(b=cython.int)
     def _write_int(self,x):
         """Write an integer encoded in vint format."""
         while x >= 128:
