@@ -42,22 +42,40 @@ class TestPerformanceAgainstCPickle(unittest.TestCase):
         return min(timer.repeat(3,10000))
 
     def assertFasterThan(self,cpt,ept):
-        if serialize.__file__.endswith(".py"):
-            return True
-        if serialize.__file__.endswith(".pyc"):
-            return True
+#        if serialize.__file__.endswith(".py"):
+#            return True
+#        if serialize.__file__.endswith(".pyc"):
+#            return True
         if cpt <= ept:
             assert False, "%s <= %s" % (cpt,ept)
 
+    def test_simple_person_string_write(self):
+        cpt = self._timeit("cPickle.dumps(p,-1)",
+                           "p = CP_Person('Ryan Kelly',12345678)")
+        ept = self._timeit("p.to_string()",
+                           "p = EP_Person('Ryan Kelly',12345678)")
+        self.assertFasterThan(cpt,ept)
+
     def test_simple_person_string(self):
-        cpt = self._timeit("cPickle.loads(cPickle.dumps(p))",
+        cpt = self._timeit("cPickle.loads(cPickle.dumps(p,-1))",
                            "p = CP_Person('Ryan Kelly',12345678)")
         ept = self._timeit("EP_Person.from_string(p.to_string())",
                            "p = EP_Person('Ryan Kelly',12345678)")
         self.assertFasterThan(cpt,ept)
 
+    def test_single_recipient_message_string_write(self):
+        cpt = self._timeit("cPickle.dumps(m,-1)",
+                           "s = CP_Person('Ryan Kelly',12345678)",
+                           "r = CP_Person('Lauren Kelly',98765)",
+                           "m = CP_Message('hey there','hi!!!',s,[r])")
+        ept = self._timeit("m.to_string()",
+                           "s = EP_Person('Ryan Kelly',12345678)",
+                           "r = EP_Person('Lauren Kelly',98765)",
+                           "m = EP_Message('hey there','hi!!!',s,[r])")
+        self.assertFasterThan(cpt,ept)
+
     def test_single_recipient_message_string(self):
-        cpt = self._timeit("cPickle.loads(cPickle.dumps(m))",
+        cpt = self._timeit("cPickle.loads(cPickle.dumps(m,-1))",
                            "s = CP_Person('Ryan Kelly',12345678)",
                            "r = CP_Person('Lauren Kelly',98765)",
                            "m = CP_Message('hey there','hi!!!',s,[r])")

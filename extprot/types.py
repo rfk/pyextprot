@@ -32,11 +32,11 @@ from itertools import izip
 
 from extprot.errors import *
 from extprot.utils import TypedList, TypedDict
-from extprot.serialize import from_string, from_file, to_string, to_file, \
-                           TYPE_VINT, TYPE_BITS8, TYPE_ASSOC, \
-                           TYPE_BITS32, TYPE_BITS64_LONG, TYPE_BITS64_FLOAT, \
-                           TYPE_ENUM, TYPE_TUPLE, TYPE_BYTES, TYPE_HTUPLE
 
+try:
+    from extprot import _serialize as serialize
+except ImportError:
+    from extprot import serialize
 
 
 def _issubclass(cls,bases):
@@ -67,6 +67,7 @@ class Type(object):
     using the 'bind' function from this module.
     """
 
+    __metaclass__ = serialize.TypeMetaclass
     _types = ()
     _unbound_types = ()
 
@@ -139,12 +140,12 @@ class Type(object):
     @classmethod
     def from_string(cls,string):
         """Read a value of this type from a string."""
-        return from_string(string,cls)
+        return serialize.from_string(string,cls)
 
     @classmethod
     def from_file(cls,file):
         """Read a value of this type from a file-like object."""
-        return from_file(file,cls)
+        return serialize.from_file(file,cls)
 
     def __eq__(self,other):
         return self is other
@@ -156,7 +157,7 @@ class Type(object):
 class Bool(Type):
     """Primitive boolean type."""
 
-    _ep_prim_type = TYPE_BITS8
+    _ep_prim_type = serialize.TYPE_BITS8
 
     @classmethod
     def _ep_convert(cls,value):
@@ -187,7 +188,7 @@ class Byte(Type):
     The canonical representation is as a single-character string.
     """
 
-    _ep_prim_type = TYPE_BITS8
+    _ep_prim_type = serialize.TYPE_BITS8
 
     @classmethod
     def _ep_convert(cls,value):
@@ -204,7 +205,7 @@ class Byte(Type):
 class Int(Type):
     """Primitive signed integer type."""
 
-    _ep_prim_type = TYPE_VINT
+    _ep_prim_type = serialize.TYPE_VINT
 
     @classmethod 
     def _ep_convert(cls,value):
@@ -234,7 +235,7 @@ class Long(Type):
     """Primitive 64-bit integer type."""
 
     _ep_max_long = 2**64
-    _ep_prim_type = TYPE_BITS64_LONG
+    _ep_prim_type = serialize.TYPE_BITS64_LONG
 
     @classmethod
     def _ep_convert(cls,value):
@@ -247,7 +248,7 @@ class Long(Type):
 class Float(Type):
     """Primitive 64-bit float type."""
 
-    _ep_prim_type = TYPE_BITS64_FLOAT
+    _ep_prim_type = serialize.TYPE_BITS64_FLOAT
 
     @classmethod
     def _ep_convert(cls,value):
@@ -261,7 +262,7 @@ class Float(Type):
 class String(Type):
     """Primitive byte-string type."""
 
-    _ep_prim_type = TYPE_BYTES
+    _ep_prim_type = serialize.TYPE_BYTES
 
     @classmethod
     def _ep_convert(cls,value):
@@ -284,7 +285,7 @@ class Tuple(Type):
 
     """
 
-    _ep_prim_type = TYPE_TUPLE
+    _ep_prim_type = serialize.TYPE_TUPLE
 
     @classmethod
     def _ep_convert(cls,value):
@@ -327,7 +328,7 @@ class List(Type):
 
     """
 
-    _ep_prim_type = TYPE_HTUPLE
+    _ep_prim_type = serialize.TYPE_HTUPLE
 
     @classmethod
     def _ep_convert(cls,value):
@@ -357,7 +358,7 @@ class Array(Type):
 
     """
 
-    _ep_prim_type = TYPE_HTUPLE
+    _ep_prim_type = serialize.TYPE_HTUPLE
 
     @classmethod
     def _ep_convert(cls,value):
@@ -375,7 +376,7 @@ class Array(Type):
         return (TypedList(cls._types[0]),cls._types)
 
 
-class _UnionMetaclass(type):
+class _UnionMetaclass(serialize.TypeMetaclass):
     """Metaclass for Union type.
 
     This metaclass is responsible for populating Union._types with a tuple
@@ -432,7 +433,7 @@ class _UnionMetaclass(type):
         return cls
 
 
-class _OptionMetaclass(type):
+class _OptionMetaclass(serialize.TypeMetaclass):
     """Metaclass for Option type.
 
     This metaclass is responsible for populating Option._ep_creation_order with
@@ -447,9 +448,9 @@ class _OptionMetaclass(type):
         cls._ep_creation_order = mcls._ep_creation_counter
         mcls._ep_creation_counter += 1
         if not cls._types:
-            cls._ep_prim_type = TYPE_ENUM
+            cls._ep_prim_type = serialize.TYPE_ENUM
         else:
-            cls._ep_prim_type = TYPE_TUPLE
+            cls._ep_prim_type = serialize.TYPE_TUPLE
         return cls
 
     def __len__(self):
@@ -603,7 +604,7 @@ class Field(Type):
         return self._types[0]._ep_render(value)
 
 
-class _MessageMetaclass(type):
+class _MessageMetaclass(serialize.TypeMetaclass):
     """Metaclass for message type.
 
     This metaclass is responsible for populating Message._ep_creation_order
@@ -664,7 +665,7 @@ class Message(Type):
 
     __metaclass__ = _MessageMetaclass
 
-    _ep_prim_type = TYPE_TUPLE
+    _ep_prim_type = serialize.TYPE_TUPLE
     _ep_initialized = False
 
     def __init__(self,*args,**kwds):
@@ -727,11 +728,11 @@ class Message(Type):
 
     def to_string(self):
         """Serialize this message to a string."""
-        return to_string(self,self.__class__)
+        return serialize.to_string(self,self.__class__)
 
     def to_file(self,file):
         """Serialize this message to a file-like object."""
-        to_file(file,self,self.__class__)
+        serialize.to_file(file,self,self.__class__)
 
     def __eq__(self,msg):
         if self.__class__ != msg.__class__:
