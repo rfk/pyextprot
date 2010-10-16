@@ -18,6 +18,8 @@ probably need to recompile any compiled protocol definitions.
         * Type.default() is now Type._ep_default()
       This change should mostly be invisible to end users, unless you were
       creating custom type subclasses.
+    * types.Field is now a metaclass; if you have custom Field subclasses you
+      may need to fix them (e.g. by implementing __new__ as well as__init__).
     * Added extprot.utils, with implementations of TypedList and TypedDict.
 
 0.2.4:

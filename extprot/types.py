@@ -111,7 +111,7 @@ class Type(object):
     def _ep_parse(cls,type,tag,value):
         """Convert a primitive type to standard repr for this type."""
         if type != cls._ep_prim_type:
-            raise UnexpectedWireTypeError
+            raise UnexpectedWireTypeError(type,cls._ep_prim_type)
         return value
 
     @classmethod

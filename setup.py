@@ -55,7 +55,7 @@ def add_ext_module(nm):
     if os.path.exists(path):
         EXT_MODULES.append(Extension("extprot."+nm,[path]))
 
-add_ext_module("_serialize")
+#add_ext_module("_serialize")
 
 ##
 ##  Main call to setup() function

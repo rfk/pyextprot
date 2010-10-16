@@ -2,3 +2,5 @@
 * testcases for protocol extensions (default values etc)
 * proper immutability of list-like types
 
+_serialize:  errors aren't raised from cython funcs that declare a return type.
+
