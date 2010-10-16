@@ -67,20 +67,23 @@ class TypedDict(dict):
     for the Assoc extprot type.
     """
 
-    def __init__(self,type,items=()):
-        items = [(k,type._ep_convert(v)) for (k,v) in dict(items).iteritems()]
+    def __init__(self,ktype,vtype,items=()):
+        items = [(ktype._ep_convert(k),vtype._ep_convert(v)) for (k,v) in dict(items).iteritems()]
         super(TypedDict,self).__init__(items)
-        self._type = type
-        self._instance = None
+        self._ktype = ktype
+        self._vtype = vtype
 
-    def _store(self,value):
-        return self._type._ep_convert(value)
+    def _kstore(self,key):
+        return self._ktype._ep_convert(key)
+
+    def _vstore(self,value):
+        return self._vtype._ep_convert(value)
 
     def __setitem__(self,key,value):
-        super(TypedDict,self).__setitem__(key,self._store(value))
+        super(TypedDict,self).__setitem__(self._kstore(key),self._vstore(value))
 
     def setdefault(self,key,value):
-        super(TypedDict,self).setdefault(key,self._store(value))
+        super(TypedDict,self).setdefault(self._kstore(key),self._vstore(value))
 
     def update(self,source,**kwds):
         try:
