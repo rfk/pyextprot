@@ -173,7 +173,7 @@ class Stream(object):
 
         This method skips over the next value in the stream without needing
         to parse its internal structure.  It's more efficient than calling
-        _read_value() and ignoring the result.
+        read_value() and ignoring the result.
 
         If there is no value left on the stream, EOFError is raised.
         """
@@ -259,12 +259,12 @@ class Stream(object):
         nitems = s._read_int()
         if nitems <= ntypes:
             for i in xrange(nitems):
-                items.append(s._read_value(subtypes[i]))
+                items.append(s.read_value(subtypes[i]))
             for i in xrange(nitems,ntypes):
                 items.append(subtypes[i]._ep_default())
         else:
             for i in xrange(ntypes):
-                items.append(s._read_value(subtypes[i]))
+                items.append(s.read_value(subtypes[i]))
             for i in xrange(ntypes,nitems):
                 s._skip_value()
         return items
@@ -275,8 +275,8 @@ class Stream(object):
         nitems = len(value)
         s._write_int(nitems)
         for i in xrange(nitems):
-           s. _write_value(value[i],subtypes[i])
-        data = s._getstring()
+           s.write_value(value[i],subtypes[i])
+        data = s.getstring()
         self._write_int(len(data))
         self._write(data)
 
@@ -294,7 +294,7 @@ class Stream(object):
             s = self
         nitems = s._read_int()
         for i in xrange(nitems):
-            items.append(s._read_value(subtypes[0]))
+            items.append(s.read_value(subtypes[0]))
         return items
 
     def _write_HTuple(self,value,subtypes):
@@ -303,8 +303,8 @@ class Stream(object):
         nitems = len(value)
         s._write_int(nitems)
         for i in xrange(nitems):
-            s._write_value(value[i],subtypes[0])
-        data = s._getstring()
+            s.write_value(value[i],subtypes[0])
+        data = s.getstring()
         self._write_int(len(data))
         self._write(data)
 
@@ -322,8 +322,8 @@ class Stream(object):
             s = self
         npairs = s._read_int()
         for i in xrange(npairs):
-            key = s._read_value(subtypes[0])
-            val = s._read_value(subtypes[1])
+            key = s.read_value(subtypes[0])
+            val = s.read_value(subtypes[1])
             items[key] = val
         return items
 
@@ -333,9 +333,9 @@ class Stream(object):
         npairs = len(value)
         s._write_int(npairs)
         for key,val in value.iteritems():
-            s._write_value(key,subtypes[0])
-            s._write_value(val,subtypes[1])
-        data = s._getstring()
+            s.write_value(key,subtypes[0])
+            s.write_value(val,subtypes[1])
+        data = s.getstring()
         self._write_int(len(data))
         self._write(data)
 
@@ -353,4 +353,7 @@ class StringStream(Stream):
        else:
            file = StringIO(value)
        super(StringStream,self).__init__(file)
+
+    def getstring(self):
+        return self.file.getvalue()
 
