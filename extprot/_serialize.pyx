@@ -23,6 +23,9 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
     char* PyString_AsString(object string)
 
+cdef extern from "object.h":
+    ctypedef class __builtin__.type [object PyHeapTypeObject]:
+        pass
  
 
 #  We expose the various TYPE_* constants as Python ingtegers for other
@@ -56,25 +59,27 @@ cdef enum TypeID:
 _S_BITS64_FLOAT = struct.Struct("<d")
 
 
-# TODO: work out how to get Cython the cdef a class inheriting from type.
-class TypeMetaclass(type):
+cdef class TypeMetaclass(type):
     """Metaclass for type classes, which direct the serialization process.
 
     This real guts of the type class structure is in extprot.types; this is
-    just here for some typedefs in the parser.
+    just here for some typedefs in the parser.  It also provides a generic
+    implementation of typeclass methods which can be used to parse/render
+    just about any sensible python value.
     """
 
-    def _ep_parse(cls,type,tag,value):
+    cpdef _ep_parse(cls,int type,long long tag,value):
         """Convert a primitive type to standard repr for this type."""
-        if type != cls._ep_prim_type:
-            raise UnexpectedWireTypeError
-        return value
+        return (tag,value)
 
-    def _ep_parse_builder(cls,type,tag):
+    cpdef _ep_parse_builder(cls,int type,long long tag,long long nitems):
         """Get collection and subtypes for using during parsing."""
-        raise UnexpectedWireTypeError
+        if type == _E_TYPE_ASSOC:
+            return ({},[cls for i in xrange(nitems)])
+        else:
+            return ([],[cls for i in xrange(nitems)])
 
-    def _ep_render(cls,value):
+    cpdef _ep_render(cls,value):
         """Convert value to tagged primitive type for rendering.
 
         This method returns a 4-tuple (type,tag,value,subtypes) where type
@@ -82,7 +87,23 @@ class TypeMetaclass(type):
         the actual primitive value, and subtypes is a tuple of types to
         use for recursive rendering.
         """
-        return (cls._ep_prim_type,cls._ep_tag,value,cls._types)
+        if isinstance(value,basestring):
+            return (_E_TYPE_BYTES,0,value,())
+        if isinstance(value,(long,int)):
+            return (_E_TYPE_INT,0,value,())
+        if isinstance(value,float):
+            return (_E_TYPE_BITS64_FLOAT,0,value,())
+        if isinstance(value,tuple):
+            return (_E_TYPE_TUPLE,0,value,[cls for i in xrange(len(value))])
+        if isinstance(value,list):
+            return (_E_TYPE_HTUPLE,0,value,(cls,))
+        if isinstance(value,dict):
+            return (_E_TYPE_ASSOC,0,value,(cls,cls))
+        raise ValueError("can't render value: %s" % (value,))
+
+
+class GenericType(object):
+    __metaclass__ = TypeMetaclass
 
 
 cdef class Stream(object):
@@ -142,7 +163,7 @@ cdef class Stream(object):
         s = PyString_FromStringAndSize(&c,1)
         self.file.write(s)
 
-    cdef _read_value(self,typcls):
+    cdef _read_value(self,TypeMetaclass typcls):
         cdef long long prefix, tag
         cdef short type
         cdef long vi32
@@ -204,7 +225,7 @@ cdef class Stream(object):
         value = typcls._ep_parse(type,tag,value)
         return value
 
-    cdef _write_value(self,value,typcls):
+    cdef _write_value(self,value,TypeMetaclass typcls):
         cdef long long tag
         cdef short type
         cdef long long vi64

@@ -543,7 +543,7 @@ class Option(Type):
 
 
 
-class Field(Type):
+class Field(serialize.TypeMetaclass):
     """Type representing a field on a Message.
 
     Field instances implement the descriptor protocol to map a given
@@ -560,6 +560,9 @@ class Field(Type):
     """
 
     _ep_creation_counter = 0
+
+    def __new__(cls,type,mutable=False):
+        return super(Field,cls).__new__(cls,"<extprot field>",(object,),{})
 
     def __init__(self,type,mutable=False):
         self._ep_creation_order = Field._ep_creation_counter
