@@ -456,6 +456,9 @@ class _OptionMetaclass(serialize.TypeMetaclass):
     def __len__(self):
         return 0
 
+    def __nonzero__(self):
+        return True
+
 
 class Option(Type):
     """Individual tagged entry in a Union type.
