@@ -462,24 +462,32 @@ cdef class Stream(object):
 
         These are encoded as [length][num elements]<elements>.
         """
-        cdef long long length, nitems, i
+        cdef long long length, nitems, ntypes, i
         cdef Stream s
         length = self._read_small_int()
         s = self._get_substream(length)
         nitems = s._read_small_int()
+        #  TODO: This is an awful hack for backwards-compatability of some
+        #        of my old code which wrote different types into an HTUPLE.
+        #        It will be removed eventually.
+        ntypes = len(subtypes)
         for i in xrange(nitems):
-            items.append(s._read_value(subtypes[0]))
+            items.append(s._read_value(subtypes[i % ntypes]))
         return items
 
     cdef _write_HTuple(self,value,subtypes):
         """Write a HTuple type to the stream."""
-        cdef long long nitems, i
+        cdef long long nitems, ntypes, i
         cdef Stream s
         s = StringStream()
         nitems = len(value)
         s._write_small_int(nitems)
+        #  TODO: This is an awful hack for backwards-compatability of some
+        #        of my old code which wrote different types into an HTUPLE.
+        #        It will be removed eventually.
+        ntypes = len(subtypes)
         for i in xrange(nitems):
-            s._write_value(value[i],subtypes[0])
+            s._write_value(value[i],subtypes[i % ntypes])
         data = s._getstring()
         self._write_small_int(len(data))
         self._write(data)

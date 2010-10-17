@@ -293,8 +293,12 @@ class Stream(object):
         else:
             s = self
         nitems = s._read_int()
+        #  TODO: This is an awful hack for backwards-compatability of some
+        #        of my old code which wrote different types into an HTUPLE.
+        #        It will be removed eventually.
+        ntypes = len(subtypes)
         for i in xrange(nitems):
-            items.append(s.read_value(subtypes[0]))
+            items.append(s.read_value(subtypes[i % ntypes]))
         return items
 
     def _write_HTuple(self,value,subtypes):
@@ -302,8 +306,12 @@ class Stream(object):
         s = StringStream()
         nitems = len(value)
         s._write_int(nitems)
+        #  TODO: This is an awful hack for backwards-compatability of some
+        #        of my old code which wrote different types into an HTUPLE.
+        #        It will be removed eventually.
+        ntypes = len(subtypes)
         for i in xrange(nitems):
-            s.write_value(value[i],subtypes[0])
+            s.write_value(value[i],subtypes[i % ntypes])
         data = s.getstring()
         self._write_int(len(data))
         self._write(data)
