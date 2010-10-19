@@ -45,8 +45,8 @@ def prep_ext_module(nm):
     path = os.path.join(os.path.dirname(__file__),"extprot",nm+".pyx")
     subprocess.check_call(["cython",path])
 
-if "sdist" in sys.argv:
-    prep_ext_module("_serialize")
+#if "sdist" in sys.argv:
+#    prep_ext_module("_serialize")
 
 #  Add the source for cython extension modules if it exists.
 
