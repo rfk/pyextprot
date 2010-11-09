@@ -83,7 +83,7 @@ class TypedDict(dict):
         super(TypedDict,self).__setitem__(self._kstore(key),self._vstore(value))
 
     def setdefault(self,key,value):
-        super(TypedDict,self).setdefault(self._kstore(key),self._vstore(value))
+        return super(TypedDict,self).setdefault(self._kstore(key),self._vstore(value))
 
     def update(self,source,**kwds):
         try:
