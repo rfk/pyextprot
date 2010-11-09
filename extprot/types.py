@@ -375,6 +375,34 @@ class Array(Type):
     def _ep_parse_builder(cls,type,tag):
         return (TypedList(cls._types[0]),cls._types)
 
+class Assoc(Type):
+    """Composed homogeneous association type.
+
+    To dynamically construct a particular list type, use the 'build' method
+    like so:
+
+        map_strings_to_ints = Assoc.build(String,Int)
+        map_2ints_to_float = Assoc.build(Tuple.build(Int,Int),Float)
+
+    """
+
+    _ep_prim_type = serialize.TYPE_ASSOC
+
+    @classmethod
+    def _ep_convert(cls,value):
+        try:
+            return TypedDict(cls._types[0],cls._types[1])
+        except TypeError:
+            raise ValueError("not a valid Dict")
+
+    @classmethod
+    def _ep_default(cls):
+        return TypedDict(cls._types[0],cls._types[1])
+
+    @classmethod
+    def _ep_parse_builder(cls,type,tag):
+        return (TypedDict(cls._types[0],cls._types[1]),cls._types)
+
 
 class _UnionMetaclass(serialize.TypeMetaclass):
     """Metaclass for Union type.

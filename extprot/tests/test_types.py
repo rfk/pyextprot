@@ -2,6 +2,7 @@
 from os import path
 import unittest
 import pickle
+import operator
 
 import extprot
 from extprot import types
@@ -19,6 +20,9 @@ class recording(types.Union):
 
 class OnOff(types.Message):
     is_on = types.Field(types.Bool)
+
+class IDs(types.Message):
+    map = types.Field(types.Assoc.build(types.Int,types.String))
 
 
 file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
@@ -71,5 +75,17 @@ class TestTypes(unittest.TestCase):
         self.assertEquals(m2.id,bignum)
         self.assertEquals(m1,m2)
 
+    def test_assoc_field(self):
+        ids = IDs()
+        self.assertEquals(ids.map,{})
+        ids.map[1] = "ONE"
+        ids.map[2] = "TWO"
+        self.assertRaises(ValueError,operator.setitem,ids.map,"THREE",3)
+        self.assertRaises(ValueError,operator.setitem,ids.map,3,3)
+        ids2 = IDs.from_string(ids.to_string())
+        self.assertEquals(ids,ids2)
+        self.assertEquals(ids2.map[1],"ONE")
+        self.assertEquals(ids2.map[2],"TWO")
+        self.assertRaises(KeyError,operator.getitem,ids2.map,3)
 
 
