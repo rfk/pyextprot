@@ -70,7 +70,7 @@ class TypeMetaclass(type):
             raise UnexpectedWireTypeError
         return value
 
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         """Get collection and subtypes for using during parsing."""
         raise UnexpectedWireTypeError
 
@@ -105,34 +105,44 @@ class Stream(object):
             raise EOFError
         type = prefix & 0xf
         tag = prefix >> 4
-        #  We can probably do this dispatch more efficiently.
-        #  A dict of method pointers?  A binary search?  Need to experiment...
-        if type == TYPE_VINT:
-            value = self._read_int()
-        elif type == TYPE_TUPLE:
-            items,subtypes = typcls._ep_parse_builder(type,tag)
-            value = self._read_Tuple(items,subtypes)
-        elif type == TYPE_BITS8:
-            value = self._read(1)
-        elif type == TYPE_BYTES:
-            size = self._read_int()
-            value = self._read(size)
-        elif type == TYPE_BITS32:
-            value = _S_BITS32.unpack(self._read(4))[0]
-        elif type == TYPE_HTUPLE:
-            items,subtypes = typcls._ep_parse_builder(type,tag)
-            value = self._read_HTuple(items,subtypes)
-        elif type == TYPE_BITS64_LONG:
-            value = _S_BITS64_LONG.unpack(self._read(8))[0]
-        elif type == TYPE_ASSOC:
-            items,subtypes = typcls._ep_parse_builder(type,tag)
-            value = self._read_Assoc(items,subtypes)
-        elif type == TYPE_BITS64_FLOAT:
-            value = _S_BITS64_FLOAT.unpack(self._read(8))[0]
-        elif type == TYPE_ENUM:
-            value = None
+        #  If the LSB of the wiretype is 1, it is length-delimited.
+        #  If not, it is a primitive type with known size.
+        if type & 0x01:
+            length = self._read_int()
+            if type == TYPE_BYTES:
+                value = self._read(length)
+            else:
+                #  For small items it's quicker to read all the data into a
+                #  string and parse it in memory than to do many small reads.
+                if length < 4096 and not isinstance(self,StringStream):
+                    s = StringStream(self._read(length))
+                else:
+                    s = self
+                nitems = s._read_int()
+                items,subtypes = typcls._ep_parse_builder(type,tag,nitems)
+                if type == TYPE_TUPLE:
+                    value = s._read_Tuple(nitems,items,subtypes)
+                elif type == TYPE_ASSOC:
+                    value = s._read_Assoc(nitems,items,subtypes)
+                elif type == TYPE_HTUPLE:
+                    value = s._read_HTuple(nitems,items,subtypes)
+                else:
+                    raise UnexpectedWireTypeError
         else:
-            raise UnexpectedWireTypeError
+            if type == TYPE_VINT:
+                value = self._read_int()
+            elif type == TYPE_BITS8:
+                value = self._read(1)
+            elif type == TYPE_BITS32:
+                value = _S_BITS32.unpack(self._read(4))[0]
+            elif type == TYPE_BITS64_LONG:
+                value = _S_BITS64_LONG.unpack(self._read(8))[0]
+            elif type == TYPE_BITS64_FLOAT:
+                value = _S_BITS64_FLOAT.unpack(self._read(8))[0]
+            elif type == TYPE_ENUM:
+                value = None
+            else:
+                raise UnexpectedWireTypeError
         value = typcls._ep_parse(type,tag,value)
         return value
 
@@ -242,31 +252,19 @@ class Stream(object):
             x = x >> 7
         self._write(chr(x))
 
-    def _read_Tuple(self,items,subtypes):
-        """Read a Tuple type from the stream.
-
-        These are encoded as [length][num elements]<elements>.  The length
-        field is used to read all the data into a string for faster parsing.
-        """
-        length = self._read_int()
-        #  For small items it's quicker to read all the data into a string
-        #  and parse it in memory than to do lots of small reads from the file.
-        if length < 4096 and not isinstance(self,StringStream):
-            s = StringStream(self._read(length))
-        else:
-            s = self
+    def _read_Tuple(self,nitems,items,subtypes):
+        """Read a Tuple type from the stream."""
         ntypes = len(subtypes)
-        nitems = s._read_int()
         if nitems <= ntypes:
             for i in xrange(nitems):
-                items.append(s.read_value(subtypes[i]))
+                items.append(self.read_value(subtypes[i]))
             for i in xrange(nitems,ntypes):
                 items.append(subtypes[i]._ep_default())
         else:
             for i in xrange(ntypes):
-                items.append(s.read_value(subtypes[i]))
+                items.append(self.read_value(subtypes[i]))
             for i in xrange(ntypes,nitems):
-                s._skip_value()
+                s.skip_value()
         return items
 
     def _write_Tuple(self,value,subtypes):
@@ -280,25 +278,14 @@ class Stream(object):
         self._write_int(len(data))
         self._write(data)
 
-    def _read_HTuple(self,items,subtypes):
-        """Read a HTuple type from the stream.
-
-        These are encoded as [length][num elements]<elements>.
-        """
-        length = self._read_int()
-        #  For small items it's quicker to read all the data into a string
-        #  and parse it in memory than to do lots of small reads from the file.
-        if length < 4096 and not isinstance(self,StringStream):
-            s = StringStream(self._read(length))
-        else:
-            s = self
-        nitems = s._read_int()
+    def _read_HTuple(self,nitems,items,subtypes):
+        """Read a HTuple type from the stream."""
         #  TODO: This is an awful hack for backwards-compatability of some
         #        of my old code which wrote different types into an HTUPLE.
         #        It will be removed eventually.
         ntypes = len(subtypes)
         for i in xrange(nitems):
-            items.append(s.read_value(subtypes[i % ntypes]))
+            items.append(self.read_value(subtypes[i % ntypes]))
         return items
 
     def _write_HTuple(self,value,subtypes):
@@ -316,22 +303,11 @@ class Stream(object):
         self._write_int(len(data))
         self._write(data)
 
-    def _read_Assoc(self,items,subtypes):
-        """Read an Assoc type from the stream.
-
-        These are encoded as [length][num pairs]<pairs>.
-        """
-        length = self._read_int()
-        #  For small items it's quicker to read all the data into a string
-        #  and parse it in memory than to do lots of small reads from the file.
-        if length < 4096 and not isinstance(self,StringStream):
-            s = StringStream(self._read(length))
-        else:
-            s = self
-        npairs = s._read_int()
-        for i in xrange(npairs):
-            key = s.read_value(subtypes[0])
-            val = s.read_value(subtypes[1])
+    def _read_Assoc(self,nitems,items,subtypes):
+        """Read an Assoc type from the stream."""
+        for i in xrange(nitems):
+            key = self.read_value(subtypes[0])
+            val = self.read_value(subtypes[1])
             items[key] = val
         return items
 

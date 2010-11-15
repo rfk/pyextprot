@@ -115,7 +115,7 @@ class Type(object):
         return value
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         """Get collection and subtypes for using during parsing."""
         raise UnexpectedWireTypeError
 
@@ -299,7 +299,7 @@ class Tuple(Type):
         return tuple(t.default() for t in self._types)
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         return ([],cls._types)
 
     @classmethod
@@ -342,7 +342,7 @@ class List(Type):
         return TypedList(cls._types[0])
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         return (TypedList(cls._types[0]),cls._types)
 
 
@@ -372,7 +372,7 @@ class Array(Type):
         return TypedList(cls._types[0])
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         return (TypedList(cls._types[0]),cls._types)
 
 class Assoc(Type):
@@ -400,7 +400,7 @@ class Assoc(Type):
         return TypedDict(cls._types[0],cls._types[1])
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         return (TypedDict(cls._types[0],cls._types[1]),cls._types)
 
 
@@ -569,7 +569,7 @@ class Option(Type):
             return cls(*value)
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         return ([],cls._types)
 
 
@@ -631,8 +631,8 @@ class Field(serialize.TypeMetaclass):
     def _ep_parse(self,type,tag,value):
         return self._types[0]._ep_parse(type,tag,value)
 
-    def _ep_parse_builder(self,type,tag):
-        return self._types[0]._ep_parse_builder(type,tag)
+    def _ep_parse_builder(self,type,tag,nitems):
+        return self._types[0]._ep_parse_builder(type,tag,nitems)
 
     def _ep_render(self,value):
         return self._types[0]._ep_render(value)
@@ -752,7 +752,7 @@ class Message(Type):
         return self
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         return ([],cls._types)
 
     @classmethod
@@ -875,12 +875,12 @@ class Union(Type):
         return subtype._ep_parse(type,tag,value)
 
     @classmethod
-    def _ep_parse_builder(cls,type,tag):
+    def _ep_parse_builder(cls,type,tag,nitems):
         try:
             subtype = cls._ep_tag_map[(type,tag)]
         except KeyError:
             raise UnexpectedWireTypeError
-        return subtype._ep_parse_builder(type,tag)
+        return subtype._ep_parse_builder(type,tag,nitems)
 
     @classmethod
     def _ep_render(cls,value):
@@ -900,7 +900,7 @@ class Unbound(Type):
         raise TypeError("parametric type not bound")
 
     @classmethod
-    def _ep_parse_builder(self,value):
+    def _ep_parse_builder(self,value,nitems):
         raise TypeError("parametric type not bound")
 
     @classmethod
@@ -924,7 +924,7 @@ class Placeholder(Type):
         raise TypeError("parametric type not bound")
 
     @classmethod
-    def _ep_parse_builder(self,value):
+    def _ep_parse_builder(self,value,nitems):
         raise TypeError("parametric type not bound")
 
     @classmethod
