@@ -23,10 +23,6 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
     char* PyString_AsString(object string)
 
-cdef extern from "object.h":
-    ctypedef class __builtin__.type [object PyHeapTypeObject]:
-        pass
- 
 
 #  We expose the various TYPE_* constants as Python ingtegers for other
 #  modules to use, but internally we use an Enum so they can be optimised.
@@ -59,73 +55,147 @@ cdef enum TypeID:
 _S_BITS64_FLOAT = struct.Struct("<d")
 
 
-cdef class TypeMetaclass(type):
-    """Metaclass for type classes, which direct the serialization process.
+class _InfiniteTuple(object):
+    def __init__(self,item):
+        self.item
+    def __getitem__(self,i):
+        return self.item
 
-    This real guts of the type class structure is in extprot.types; this is
-    just here for some typedefs in the parser.  It also provides a generic
-    implementation of typeclass methods which can be used to parse/render
-    just about any sensible python value.
+
+cdef class TypeDesc(object):
+    """Object used to direct the serialization process.
+
+    Instances of TypeDesc are used to direct the serialization
+    process.  Each typeclass provides a TypeDesc object whose
+    method hooks are called at appropriate times during parsing or redering.
+
+    The base class provides no useful functionality, it just errors out.
+    Subclasses provide behaviour specialised to the base extprot types,
+    and calling code can feel free to provide any custom behaviour it needs.
+
+    This is broken off into a separate class so that the cython-based parser
+    can implement the common methods in C.
     """
 
-    cpdef _ep_parse(cls,int type,long long tag,value):
-        """Convert a primitive type to standard repr for this type."""
-        return value
+    cdef public dict collection_constructor
+    cdef public dict subtypes
 
-    cpdef tuple _ep_parse_builder(cls,int type,long long tag,long long nitems):
-        """Get collection and subtypes for using during parsing."""
-        if type == _E_TYPE_ASSOC:
-            return ({},(cls,cls))
-        elif type == _E_TYPE_HTUPLE:
-            return ([],(cls,))
-        else:
-            return ([],tuple([cls for _ in nitems]))
+    def __init__(self):
+        if self.collection_constructor is None:
+            self.collection_constructor = {}
+        if self.subtypes is None:
+            self.subtypes = {}
 
-    cpdef tuple _ep_render(cls,value):
+    cpdef parse_value(self,value,TypeID type,long long tag):
+        """Finalize parsing of a value from the extprot bytestream.
+
+        This method will be called when a new value has been read off the
+        bytestream.  Given the primitive type, tag and value, it should
+        return the final object to be returned from the parser.
+        """
+        raise NotImplementedError
+
+    cpdef tuple render_value(self,value):
         """Convert value to tagged primitive type for rendering.
 
-        This method returns a 4-tuple (type,tag,value,subtypes) where type
-        if the primitive type identitier, tag is the value tag, value is
-        the actual primitive value, and subtypes is a tuple of types to
-        use for recursive rendering.
+        This method will be called when a value is about to be written out.
+        It must convert the value to something renderable, and return a
+        3-tuple giving the value, type and tag.
         """
-        if isinstance(value,basestring):
-            return (_E_TYPE_BYTES,0,value,())
-        if isinstance(value,(long,int)):
-            return (_E_TYPE_INT,0,value,())
-        if isinstance(value,float):
-            return (_E_TYPE_BITS64_FLOAT,0,value,())
-        if isinstance(value,tuple):
-            return (_E_TYPE_TUPLE,0,value,[cls])
-        if isinstance(value,list):
-            return (_E_TYPE_HTUPLE,0,value,(cls,))
-        if isinstance(value,dict):
-            return (_E_TYPE_ASSOC,0,value,(cls,cls))
-        raise ValueError("can't render value: %s" % (value,))
+        raise NotImplementedError
+
+    cpdef default_value(self):
+        """Construct default value for this type.
+
+        This method will be called whenever a default value of this type 
+        is required.
+        """
+        raise UndefinedDefaultError
+
+
+
+cdef class SingleTypeDesc(TypeDesc):
+    """TypeDesc class for types with a single type tag.
+
+    This is a typedesc suitable for use with most primitive types, where
+    there is a single type and tag regardless of the value.
+    """
+
+    cdef public TypeID type
+    cdef public long long tag
+
+    cpdef parse_value(self,value,TypeID type,long long tag):
+        if type != self.type:
+            raise UnexpectedWireTypeError
+        return value
+
+    cpdef tuple render_value(self,value):
+        return (value,self.type,self.tag)
+
+
+cdef class BoolTypeDesc(SingleTypeDesc):
+    """TypeDesc class for boolean-like types."""
+
+    cpdef parse_value(self,value,TypeID type,long long tag):
+        value = SingleTypeDesc.parse_value(self,value,type,tag)
+        return (value != "\x00")
+
+    cpdef tuple render_value(self,value):
+        if value:
+            value = "\x01"
+        else:
+            value = "\x00"
+        return SingleTypeDesc.render_value(self,value)
+
+    cpdef default_value(self):
+        return False
+
+
+cdef class IntTypeDesc(SingleTypeDesc):
+    """TypeDesc class for integer-like types."""
+
+    cpdef parse_value(self,value,TypeID type,long long tag):
+        value = SingleTypeDesc.parse_value(self,value,type,tag)
+        if value % 2:
+            return value // -2
+        else:
+            return value // 2
+
+    cpdef tuple render_value(self,value):
+        if value >= 0:
+            value = value * 2
+        else:
+            value = (value * -2) - 1
+        return SingleTypeDesc.render_value(self,value)
 
 
 
 cdef class Stream(object):
-    """Base class for processing an extprot bytestream."""
+    """Base class for processing an extprot bytestream.
+
+    Instances of this class are used to read or write objects to a generic
+    filelike object.  A specialized subclass StringString is used when
+    writing to an in-memory string.
+    """
 
     cdef object file
 
     def __init__(self,file):
         self.file = file
 
-    def read_value(self,TypeMetaclass typcls):
+    def read_value(self,TypeDesc typdesc):
         """Read a generic value from the stream.
 
-        This method takes a type class object and constructs a value for
-        it by reading a value off the stream.
+        This method takes a type description object and constructs a value
+        for it by reading a value off the stream.
 
         If there are no more values in the stream, EOFError will be raised.
         """
-        return self._read_value(typcls)
+        return self._read_value(typdesc)
 
-    def write_value(self,value,TypeMetaclass typcls):
+    def write_value(self,value,TypeDesc typdesc):
         """Write a generic value to the stream."""
-        self._write_value(value,typcls)
+        self._write_value(value,typdesc)
 
     def getstring(self):
         return self._getstring()
@@ -162,19 +232,18 @@ cdef class Stream(object):
         s = PyString_FromStringAndSize(&c,1)
         self.file.write(s)
 
-    cdef _read_value(self,TypeMetaclass typcls):
+    cdef _read_value(self,TypeDesc typdesc):
         cdef long long prefix, tag, length, nitems
-        cdef short type
+        cdef TypeID type
         cdef long vi32
         cdef long long vi64
         cdef char* data
-        cdef tuple subtypes
         cdef Stream s
         try:
             prefix = self._read_small_int()
         except UnexpectedEOFError:
             raise EOFError
-        type = prefix & 0xf
+        type = <TypeID>(prefix & 0xf)
         tag = prefix >> 4
         #  In theory we should be able to produce a switch here, but
         #  it's not working for me.  Instead, branch on whether its delimited.
@@ -186,14 +255,20 @@ cdef class Stream(object):
                 value = self._read(length)
             else:
                 s = self._get_substream(length)
-                nitems = s._read_small_int()
-                items,subtypes = typcls._ep_parse_builder(type,tag,nitems)
+                try:
+                    items = typdesc.collection_constructor[(type,tag)]()
+                except KeyError:
+                    raise UnexpectedWireTypeError
+                try:
+                    subtypes = typdesc.subtypes[(type,tag)]
+                except KeyError:
+                    raise UnexpectedWireTypeError
                 if type == _E_TYPE_TUPLE:
-                    value = s._read_Tuple(nitems,items,subtypes)
+                    value = s._read_Tuple(items,subtypes)
                 elif type == _E_TYPE_ASSOC:
-                    value = s._read_Assoc(nitems,items,subtypes)
+                    value = s._read_Assoc(items,subtypes)
                 elif type == _E_TYPE_HTUPLE:
-                    value = s._read_HTuple(nitems,items,subtypes)
+                    value = s._read_HTuple(items,subtypes)
                 else:
                     raise UnexpectedWireTypeError
         else:
@@ -230,19 +305,21 @@ cdef class Stream(object):
                 value = None
             else:
                 raise UnexpectedWireTypeError
-        value = typcls._ep_parse(type,tag,value)
+        value = typdesc.parse_value(value,type,tag)
         return value
 
-    cdef _write_value(self,value,TypeMetaclass typcls):
+    cdef _write_value(self,value,TypeDesc typdesc):
         cdef long long tag
-        cdef short type
+        cdef TypeID type
         cdef long long vi64
         cdef long vi32
-        (type,tag,value,subtypes) = typcls._ep_render(value)         
+        orig_value = value
+        (value,type,tag) = typdesc.render_value(value)
         self._write_small_int(tag << 4 | type)
         if type == _E_TYPE_VINT:
             self._write_int(value)
         elif type == _E_TYPE_TUPLE:
+            subtypes = typdesc.subtypes[(type,tag)]
             self._write_Tuple(value,subtypes)
         elif type == _E_TYPE_BITS8:
             self._write(value)
@@ -256,6 +333,7 @@ cdef class Stream(object):
             self._write_char((vi32 >> 16) & 0xff)
             self._write_char((vi32 >> 24) & 0xff)
         elif type == _E_TYPE_HTUPLE:
+            subtypes = typdesc.subtypes[(type,tag)]
             self._write_HTuple(value,subtypes)
         elif type == _E_TYPE_BITS64_LONG:
             vi64 = value
@@ -268,6 +346,7 @@ cdef class Stream(object):
             self._write_char((vi64 >> 48) & 0xff)
             self._write_char((vi64 >> 56) & 0xff)
         elif type == _E_TYPE_ASSOC:
+            subtypes = typdesc.subtypes[(type,tag)]
             self._write_Assoc(value,subtypes)
         elif type == TYPE_BITS64_FLOAT:
             data = _S_BITS64_FLOAT.pack(value)
@@ -288,32 +367,33 @@ cdef class Stream(object):
         If there is no value left on the stream, EOFError is raised.
         """
         cdef long long prefix, tag, length
-        cdef short type
+        cdef TypeID type
         try:
             prefix = self._read_small_int()
         except UnexpectedEOFError:
             raise EOFError
-        type = prefix & 0xf
+        type = <TypeID>(prefix & 0xf)
         tag = prefix >> 4
         #  If the LSB of the wiretype is 1, it is length-delimited.
         #  If not, it is a primitive type with known size.
         if type & 0x01:
             length = self._read_small_int()
             self._skip(length)
-        elif type == _E_TYPE_VINT:
-            self._read_int()
-        elif type == TYPE_BITS8:
-            self._skip(1)
-        elif type == _E_TYPE_BITS32:
-            self._skip(4)
-        elif type == _E_TYPE_BITS64_LONG:
-            self._skip(8)
-        elif type == _E_TYPE_BITS64_FLOAT:
-            self._skip(8)
-        elif type == _E_TYPE_ENUM:
-            pass
         else:
-            raise UnexpectedWireTypeError
+            if type == _E_TYPE_VINT:
+                self._read_int()
+            elif type == TYPE_BITS8:
+                self._skip(1)
+            elif type == _E_TYPE_BITS32:
+                self._skip(4)
+            elif type == _E_TYPE_BITS64_LONG:
+                self._skip(8)
+            elif type == _E_TYPE_BITS64_FLOAT:
+                self._skip(8)
+            elif type == _E_TYPE_ENUM:
+                pass
+            else:
+                raise UnexpectedWireTypeError
 
     cdef _read_int(self):
         """Read an integer encoded in vint format.""" 
@@ -323,8 +403,8 @@ cdef class Stream(object):
         b = <unsigned short>self._read_char()
         if b < 128:
             return b
-        #  Read as much as we can using C long longs
         lx = le = 0
+        #  Read as much as we can using C long longs
         while lx < 144115188075855871LLU: # (2**(64-7)-1)
             if b < 128:
                 lh = b
@@ -425,15 +505,14 @@ cdef class Stream(object):
             return StringStream(self._read(length))
         return self
 
-    cdef _read_Tuple(self,long long nitems,items,tuple subtypes):
+    cdef _read_Tuple(self,items,tuple subtypes):
         """Read a Tuple type from the stream."""
-        cdef long long ntypes, i
+        cdef long long ntypes, nitems, i
+        nitems = self._read_small_int()
         ntypes = len(subtypes)
         if nitems <= ntypes:
             for i in xrange(nitems):
                 items.append(self._read_value(subtypes[i]))
-            for i in xrange(nitems,ntypes):
-                items.append(subtypes[i]._ep_default())
         else:
             for i in xrange(ntypes):
                 items.append(self._read_value(subtypes[i]))
@@ -454,12 +533,10 @@ cdef class Stream(object):
         self._write_small_int(len(data))
         self._write(data)
 
-    cdef _read_HTuple(self,long long nitems,items,tuple subtypes):
+    cdef _read_HTuple(self,items,tuple subtypes):
         """Read a HTuple type from the stream."""
-        cdef long long ntypes, i
-        #  TODO: This is an awful hack for backwards-compatability of some
-        #        of my old code which wrote different types into an HTUPLE.
-        #        It will be removed eventually.
+        cdef long long ntypes, nitems, i
+        nitems = self._read_small_int()
         ntypes = len(subtypes)
         for i in xrange(nitems):
             items.append(self._read_value(subtypes[i % ntypes]))
@@ -472,9 +549,6 @@ cdef class Stream(object):
         s = StringStream()
         nitems = len(value)
         s._write_small_int(nitems)
-        #  TODO: This is an awful hack for backwards-compatability of some
-        #        of my old code which wrote different types into an HTUPLE.
-        #        It will be removed eventually.
         ntypes = len(subtypes)
         for i in xrange(nitems):
             s._write_value(value[i],subtypes[i % ntypes])
@@ -482,15 +556,17 @@ cdef class Stream(object):
         self._write_small_int(len(data))
         self._write(data)
 
-    cdef _read_Assoc(self,long long nitems,items,tuple subtypes):
+    cdef _read_Assoc(self,items,tuple subtypes):
         """Read an Assoc type from the stream.
 
         These are encoded as [length][num pairs]<pairs>.
         """
-        cdef long long i
+        cdef long long ntypes, nitems, i
+        nitems = self._read_small_int()
+        ntypes = len(subtypes)
         for i in xrange(nitems):
-            key = self._read_value(subtypes[0])
-            val = self._read_value(subtypes[1])
+            key = self._read_value(subtypes[(2*i) % ntypes])
+            val = self._read_value(subtypes[(2*i + 1) % ntypes])
             items[key] = val
         return items
 
@@ -501,9 +577,10 @@ cdef class Stream(object):
         s = StringStream()
         npairs = len(value)
         s._write_int(npairs)
+        ntypes = len(subtypes)
         for key,val in value.iteritems():
-            s._write_value(key,subtypes[0])
-            s._write_value(val,subtypes[1])
+            s._write_value(key,subtypes[(2*i) % ntypes])
+            s._write_value(val,subtypes[(2*i + 1) % ntypes])
         data = s._getstring()
         self._write_int(len(data))
         self._write(data)
@@ -618,24 +695,25 @@ def from_string(string,typcls):
     """Parse an instance of the given typeclass from the given string."""
     cdef StringStream s
     s = StringStream(string)
-    return s._read_value(typcls)
+    return s._read_value(typcls._ep_typedesc)
 
 def from_file(file,typcls):
     """Parse an instance of the given typeclass from the given file."""
     cdef Stream s
     s = Stream(file)
-    return s._read_value(typcls)
+    return s._read_value(typcls._ep_typedesc)
 
 def to_string(value,typcls):
     """Render an instance of the given typeclass into a string."""
     cdef StringStream s
     s = StringStream()
-    s._write_value(value,typcls)
+    s._write_value(value,typcls._ep_typedesc)
     return s._getstring()
 
 def to_file(file,value,typcls):
     """Render an instance of the given typeclass into a file."""
     cdef Stream s
     s = Stream(file)
-    s._write_value(value,typcls)
+    s._write_value(value,typcls._ep_typedesc)
+
 

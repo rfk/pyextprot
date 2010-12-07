@@ -8,7 +8,8 @@ probably need to recompile any compiled protocol definitions.
         * the compiled version is now faster than cPickle on simple tests.
         * the parsing loop is now driven from the inside and calls out to Type
           classes, rather than having Type classes call into the parser.
-            * extprot.serialize contains the new implementation
+            * extprot.serialize contains the new pure-python implementation
+            * extprot._serialize contains the option cython implementation
             * extprot.stream has been removed, along with Type.to_stream()
               and Type.from_stream()
     * With the exception of "_types" and "_unbound_types", all extprot-related
@@ -21,8 +22,6 @@ probably need to recompile any compiled protocol definitions.
     * Added types.Assoc to provide a basic mapping type; there was always
       a wire type reserved for this but it's not exposed in the protocol
       grammar.
-    * types.Field is now a metaclass; if you have custom Field subclasses you
-      may need to fix them (e.g. by implementing __new__ as well as__init__).
     * Added extprot.utils, with implementations of TypedList and TypedDict.
 
 0.2.4:

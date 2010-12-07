@@ -16,6 +16,10 @@ class ParseError(Error):
     """Error parsing a badly-formed byte stream."""
     pass
 
+class RenderError(Error):
+    """Error rendering an object to a byte stream."""
+    pass
+
 class UnexpectedEOFError(ParseError):
     """Error when EOF is reached in mid-parse."""
     pass
