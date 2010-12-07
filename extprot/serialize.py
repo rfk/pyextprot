@@ -137,6 +137,92 @@ class SingleTypeDesc(TypeDesc):
         return (value,self.type,self.tag)
 
 
+class BoolTypeDesc(SingleTypeDesc):
+    """TypeDesc class for boolean-like types."""
+
+    def parse_value(self,value,type,tag):
+        value = SingleTypeDesc.parse_value(self,value,type,tag)
+        return (value != "\x00")
+
+    def render_value(self,value):
+        if value:
+            value = "\x01"
+        else:
+            value = "\x00"
+        return SingleTypeDesc.render_value(self,value)
+
+    def default_value(self):
+        return False
+
+
+class IntTypeDesc(SingleTypeDesc):
+    """TypeDesc class for integer-like types."""
+
+    def parse_value(self,value,type,tag):
+        value = SingleTypeDesc.parse_value(self,value,type,tag)
+        if value % 2:
+            return value // -2
+        else:
+            return value // 2
+
+    def render_value(self,value):
+        if value >= 0:
+            value = value * 2
+        else:
+            value = (value * -2) - 1
+        return SingleTypeDesc.render_value(self,value)
+
+
+class TupleTypeDesc(SingleTypeDesc):
+    """TypeDesc class for tuple-like types."""
+
+    def parse_value(self,value,type,tag):
+        #  Try to parse it as a proper tuple type
+        subtypes = self.subtypes[(self.type,self.tag)]
+        if type == self.type:
+            if len(value) < len(subtypes):
+                for t in subtypes[len(value):]:
+                    value.append(t.default_value())
+            return tuple(value)
+        #  Try to promote it from a primitive type to the first tuple item.
+        if not subtypes:
+            err = "could not promote primitive to Tuple type"
+            raise ParseError(err)
+        else:
+            values = [subtypes[0].parse_value(value,type,tag)]
+            for t in subtypes[1:]:
+                values.append(t.default_value())
+            return tuple(values)
+
+    def default_value(self):
+        values = []
+        subtypes = self.subtypes[(self.type,self.tag)]
+        for t in subtypes:
+            values.append(t.default_value())
+        return tuple(values)
+
+
+class MessageTypeDesc(TupleTypeDesc):
+    """TypeDesc class for message types."""
+
+    def parse_value(self,value,type,tag):
+        value = TupleTypeDesc.parse_value(self,value,type,tag)
+        #  Bypass typechecking by initialising the values before calling
+        #  __init__.  We already know the types are valid.
+        inst = self.type_class.__new__(self.type_class)
+        for i in xrange(min(len(inst._ep_fields),len(value))):
+            inst.__dict__[inst._ep_fields[i]._ep_name] = value[i]
+        inst._ep_initialized = True
+        inst.__init__(*value)
+        return inst
+
+    def render_value(self,value):
+        value = [value.__dict__[f._ep_name] for f in self.type_class._ep_fields]
+        return TupleTypeDesc.render_value(self,value)
+
+    def default_value(self):
+        return self.type_class()
+
 
 
 class Stream(object):

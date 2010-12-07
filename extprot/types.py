@@ -312,26 +312,6 @@ class Tuple(Type):
         except TypeError:
             raise ValueError("not a valid Tuple")
 
-    @classmethod
-    def _ep_default(cls):
-        return tuple(t.default() for t in self._types)
-
-    @classmethod
-    def _ep_parse(cls,type,tag,value):
-        if type == cls._ep_primtype:
-            if len(value) < len(self._types):
-                for t in self._types[len(value):]:
-                    value.append(t._ep_default())
-            return tuple(value)
-        #  Try to promote it from a primitive type to the first tuple item.
-        if not cls._types:
-            err = "could not promote primitive to Tuple type"
-            raise ParseError(err)
-        else:
-            items = [cls._types[0]._ep_parse(type,tag,value)]
-            items.extend(t._ep_default() for t in cls._types[1:])
-            return tuple(items)
-
 
 
 class List(Type):
@@ -621,6 +601,15 @@ class _MessageMetaclass(_TypeMetaclass):
             f._ep_name = nm
         #  Add the field types to cls._types
         attrs["_types"] = tuple(f._ep_type for f in attrs["_ep_fields"])
+        #  Ensure it gets a new TypeDesc object
+        if "_ep_primtype" not in attrs:
+            for b in bases:
+                try:
+                    attrs["_ep_primtype"] = b._ep_primtype
+                except AttributeError:
+                    pass
+                else:
+                    break
         #  Finally we can create the class
         cls = super(_MessageMetaclass,mcls).__new__(mcls,name,bases,attrs)
         cls._ep_creation_order = mcls._ep_creation_counter
@@ -649,6 +638,7 @@ class Message(Type):
     __metaclass__ = _MessageMetaclass
 
     _ep_primtype = serialize.TYPE_TUPLE
+    _ep_typedesc_class = serialize.MessageTypeDesc
     _ep_initialized = False
 
     def __init__(self,*args,**kwds):
@@ -682,26 +672,6 @@ class Message(Type):
             return cls(*value)
         else:
             return cls(**value)
-
-    @classmethod
-    def _ep_default(cls):
-        return cls()
-
-    @classmethod
-    def _ep_parse(cls,value,type,tag):
-        #  Bypass typechecking by initialising the values before calling
-        #  __init__.  We already know the types are valid.
-        self = cls.__new__(cls)
-        for (f,v) in izip(self._ep_fields,value):
-            self.__dict__[f._ep_name] = v
-        self._ep_initialized = True
-        self.__init__(*value)
-        return self
-
-    @classmethod
-    def _ep_render(cls,value):
-        value = [value.__dict__[f._ep_name] for f in cls._ep_fields]
-        return (value,cls._ep_primtype,cls._ep_tag,)
 
     @classmethod
     def _ep_collection(cls):
