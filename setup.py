@@ -39,6 +39,7 @@ PACKAGES = ["extprot","extprot.tests"]
 EXT_MODULES = []
 PKG_DATA = {}
 
+
 ##
 ##  If building a source distribution, cython-compile necessary modules.
 ##
