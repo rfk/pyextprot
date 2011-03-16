@@ -57,13 +57,6 @@ def to_file(file,value,typcls):
     s.write_value(value,typcls._ep_typedesc)
 
 
-class _InfiniteTuple(object):
-    """A simulated infinite-length tuple with the same item at each index."""
-    def __init__(self,item):
-        self.item = item
-    def __getitem__(self,i):
-        return self.item
-
 
 class TypeDesc(object):
     """Object used to direct the serialization process.
@@ -106,7 +99,7 @@ class TypeDesc(object):
         """
         raise NotImplementedError
 
-    def default_value(self,value):
+    def default_value(self):
         """Construct default value for this type.
 
         This method will be called whenever a default value of this type 

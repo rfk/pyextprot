@@ -33,7 +33,8 @@ class TestTypes(unittest.TestCase):
 
     def test_pickling_compiled(self):
         p1 = person("Guido",7)
-        assert pickle.loads(pickle.dumps(p1)) == p1
+        p2 = pickle.loads(pickle.dumps(p1))
+        assert p1 == p2
 
     def test_pickling_manual(self):
         m1 = movie(1,"Bad Eggs",["Mick Molloy","Judith Lucy"])

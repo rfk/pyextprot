@@ -211,6 +211,7 @@ class NamespaceCompiler(BaseCompiler):
                 self._adjust_type_name(Opt,opt_data[0])
                 locals()[opt_data[0]] = Opt
                 del Opt
+                del opt_dict
             del opt_data
         return Anon
 

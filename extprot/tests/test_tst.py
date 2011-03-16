@@ -111,12 +111,14 @@ def make_cases(metadata,meta,source,doc,dim,**extra):
 
 #  test the hard-crafted translation at the start of this file
 Test_handcrafted = make_cases(**globals())
+Test_handcrafted.__name__ = "Test_handcrafted"
 
 #  test the dynamic in-memory compilation
 file = path.join(path.dirname(__file__),"../../examples/tst.proto")
 dynamic = {}
 extprot.import_protocol(file,dynamic)
 Test_dynamic = make_cases(**dynamic)
+Test_dynamic.__name__ = "Test_dynamic"
 
 #  test the to-source-code compilation
 file = path.join(path.dirname(__file__),"../../examples/tst.proto")
@@ -128,6 +130,7 @@ try:
         extprot.compile_protocol(open(file),f)
     execfile(modfile,compiled)
     Test_compiled = make_cases(**compiled)
+    Test_compiled.__name__ = "Test_compiled"
 finally:
     shutil.rmtree(tdir)
 

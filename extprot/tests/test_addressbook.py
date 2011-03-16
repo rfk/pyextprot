@@ -47,8 +47,8 @@ def make_cases(optional,phone_type,person,address_book,**extra):
         def test_types(self):
             self.assertEquals(len(person._types),4)
             self.assertEquals(len(optional._types),2)
-            assert issubclass(person._types[2]._types[0],optional)
-            self.assertEquals(len(person._types[2]._types[0]._types),2)
+            assert issubclass(person._types[2],optional)
+            self.assertEquals(len(person._types[2]._types),2)
 
         def test_person(self):
             p1 = person("Ryan",1,optional.Set("ryan@rfk.id.au"),[])
@@ -79,13 +79,15 @@ def make_cases(optional,phone_type,person,address_book,**extra):
     return TestAddressBook
 
 #  test the hard-crafted translation at the start of this file
-TestAddessBook_handcrafted = make_cases(**globals())
+Test_handcrafted = make_cases(**globals())
+Test_handcrafted.__name__ = "Test_handcrafted"
 
 #  test the dynamic in-memory compilation
 file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
 dynamic = {}
 extprot.import_protocol(file,dynamic)
 Test_dynamic = make_cases(**dynamic)
+Test_dynamic.__name__ = "Test_dynamic"
 
 #  test the to-source-code compilation
 file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
@@ -98,6 +100,7 @@ try:
         extprot.compile_protocol(file,f)
     execfile(modfile,compiled)
     Test_compiled = make_cases(**compiled)
+    Test_compiled.__name__ = "Test_compiled"
 finally:
     shutil.rmtree(tdir)
 

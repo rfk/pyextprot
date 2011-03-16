@@ -39,3 +39,4 @@ class TestExtensions(unittest.TestCase):
         self.assertRaises(types.ParseError,M2.from_string,M3("hello").to_string())
 
 
+

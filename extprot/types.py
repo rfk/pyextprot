@@ -50,7 +50,7 @@ def _issubclass(cls,bases):
 class _TypeMetaclass(type):
     """Metaclass for all extprot type objects.
 
-    This metaclass is responsible for creating the "ep_typedesc" attribute
+    This metaclass is responsible for creating the "_ep_typedesc" attribute
     of each type class, which direct the low-level serialization machinery.
     If custom parsing methods such as "_ep_parse" or "_ep_render" are given
     then these are hooked into the typedesc object.
@@ -59,15 +59,18 @@ class _TypeMetaclass(type):
     def __new__(mcls,name,bases,attrs):
         cls = super(_TypeMetaclass,mcls).__new__(mcls,name,bases,attrs)
         cls._ep_make_typedesc()
-        #  Now that the class dict has been processed, we can give them
-        #  the various _ep_* methods directory.  This is so that instances
+        #  Now that the class dict has been processed, we can give it
+        #  the various _ep_* methods directly.  This is so that instances
         #  of the typeclass will lookup these methods correctly.
         def add_method(nm):
             for supcls in cls.__mro__:
                 if "_ep_"+nm in supcls.__dict__:
                     break
             else:
-                setattr(cls,"_ep_"+nm,getattr(cls._ep_typedesc,nm+"_value"))
+                @classmethod
+                def _forwarder(cls,*args):
+                    return getattr(cls._ep_typedesc,nm+"_value")(*args)
+                setattr(cls,"_ep_"+nm,_forwarder)
         add_method("parse")
         add_method("render")
         add_method("default")
@@ -103,10 +106,8 @@ class _TypeMetaclass(type):
                     return self.type_class._ep_default()
             def __init__(self):
                 super(typedesc_class,self).__init__()
-                if "_ep_primtype" in tc.__dict__:
-                    self.type = tc._ep_primtype
-                if "_ep_tag" in self.__dict__:
-                    self.tag = tc._ep_tag
+                self.type = tc._ep_primtype
+                self.tag = tc._ep_tag
                 key = (self.type_class._ep_primtype,self.type_class._ep_tag)
                 if "_ep_collection" in tc.__dict__:
                     self.collection_constructor = {
@@ -118,6 +119,7 @@ class _TypeMetaclass(type):
                         key : subtypes
                     }
         self._ep_typedesc = typedesc_class()
+        assert self._ep_typedesc.tag == self._ep_tag
 
 
 class Type(object):
@@ -307,6 +309,7 @@ class Tuple(Type):
     """
 
     _ep_primtype = serialize.TYPE_TUPLE
+    _ep_typedesc_class = serialize.TupleTypeDesc
 
     @classmethod
     def _ep_convert(cls,value):
@@ -315,6 +318,9 @@ class Tuple(Type):
         except TypeError:
             raise ValueError("not a valid Tuple")
 
+    @classmethod
+    def _ep_collection(cls):
+        return []
 
 
 class List(Type):
@@ -871,7 +877,8 @@ class Union(Type):
             else:
                 err = "could not promote primitive to Union type"
                 raise ParseError(err)
-        return subtype._ep_parse(value,type,tag)
+        else:
+            return subtype._ep_parse(value,type,tag)
 
     @classmethod
     def _ep_render(cls,value):
@@ -1063,6 +1070,15 @@ def resolve_placeholders(type):
             setter(defined_names[name])
  
     """
+    if issubclass(type,Message):
+        for field in type._ep_fields:
+            if isinstance(field._ep_type,Placeholder):
+                result = []
+                def setter(value):
+                    result.append(value)
+                yield (field._ep_type.name,setter)
+                if result:
+                    field._ep_type = result[0]
     new_types = []
     for t2 in type._types:
         if isinstance(t2,Placeholder):
@@ -1079,10 +1095,55 @@ def resolve_placeholders(type):
                 yield sub
             new_types.append(t2)
     new_types = tuple(new_types)
-    if type._types != new_types:
+    # TODO:  there's no way for a Union to detect that one of its options
+    #        has some placeholders replaced.  This is a hack around it.
+    if type._types != new_types or _issubclass(type,Union):
         class new_type(type):
             _types = new_types
         type._types = new_types
-        type._ep_typedesc = new_type._ep_typedesc
+        type._ep_typedesc.subtypes = new_type._ep_typedesc.subtypes
+    #else:
+    #    missed = list(find_instances(Placeholder,type))
+    #    if missed:
+    #        assert not missed, "missed placeholders: " + str(missed)
 
+
+def find_instances(cls,obj,path="obj",seen=None):
+    """Find instances of the given class attached to the given object.
+
+    This walks the object tree rooted at the given object, looking for
+    for instances of the given class.  It yields string paths telling you
+    how it found them.
+
+    Only really useful for debugging.
+    """
+    if seen is None:
+        seen = set()
+    if id(obj) in seen:
+        pass
+    elif isinstance(obj,cls) or obj is cls:
+        yield path
+    else:
+        seen.add(id(obj))
+        if isinstance(obj,(tuple,list)):
+            for i in xrange(len(obj)):
+                for found in find_instances(cls,obj[i],path+"[%d]"%(i,),seen):
+                    yield found
+        elif isinstance(obj,(dict,)):
+            for k in obj.keys():
+                for found in find_instances(cls,obj[k],path+"[%s]"%(k,),seen):
+                    yield found
+        elif isinstance(obj,(int,long,float,basestring,bool,)):
+            pass
+        elif isinstance(obj,(type(None),type(sys),)):
+            pass
+        else:
+            for attr in dir(obj):
+                if attr.startswith("__") and attr.endswith("__"):
+                    continue
+                if attr == "func_globals":
+                    continue
+                val = getattr(obj,attr,None)
+                for found in find_instances(cls,val,path+"."+attr,seen):
+                    yield found
 
