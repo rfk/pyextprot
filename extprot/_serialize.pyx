@@ -316,7 +316,7 @@ cdef class Stream(object):
                 try:
                     items = typdesc.collection_constructor[(type,tag)]()
                 except KeyError:
-                    raise UnexpectedWireTypeError
+                    raise UnexpectedWireTypeError((type,tag))
                 try:
                     subtypes = typdesc.subtypes[(type,tag)]
                 except KeyError:
@@ -630,15 +630,17 @@ cdef class Stream(object):
 
     cdef _write_Assoc(self,value,subtypes):
         """Write an Assoc type to the stream."""
-        cdef long long npairs
+        cdef long long npairs, i
         cdef Stream s
         s = StringStream()
         npairs = len(value)
         s._write_int(npairs)
         ntypes = len(subtypes)
+        i = 0
         for key,val in value.iteritems():
             s._write_value(key,subtypes[(2*i) % ntypes])
             s._write_value(val,subtypes[(2*i + 1) % ntypes])
+            i += 1
         data = s._getstring()
         self._write_int(len(data))
         self._write(data)

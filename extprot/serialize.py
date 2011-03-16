@@ -417,7 +417,7 @@ class Stream(object):
             for i in xrange(ntypes):
                 items.append(self.read_value(subtypes[i]))
             for i in xrange(ntypes,nitems):
-                s.skip_value()
+                self.skip_value()
         return items
 
     def _write_Tuple(self,value,subtypes):

@@ -9,7 +9,7 @@ probably need to recompile any compiled protocol definitions.
         * the parsing loop is now driven from the inside and calls out to Type
           classes, rather than having Type classes call into the parser.
             * extprot.serialize contains the new pure-python implementation
-            * extprot._serialize contains the option cython implementation
+            * extprot._serialize contains the optional cython implementation
             * extprot.stream has been removed, along with Type.to_stream()
               and Type.from_stream()
     * With the exception of "_types" and "_unbound_types", all extprot-related
@@ -21,7 +21,7 @@ probably need to recompile any compiled protocol definitions.
       creating custom type subclasses.
     * Added types.Assoc to provide a basic mapping type; there was always
       a wire type reserved for this but it's not exposed in the protocol
-      grammar.
+      grammar so I hadn't implemented it.
     * Added extprot.utils, with implementations of TypedList and TypedDict.
 
 0.2.4:

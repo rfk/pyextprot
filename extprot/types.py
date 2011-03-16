@@ -59,16 +59,19 @@ class _TypeMetaclass(type):
     def __new__(mcls,name,bases,attrs):
         cls = super(_TypeMetaclass,mcls).__new__(mcls,name,bases,attrs)
         cls._ep_make_typedesc()
+        #  Now that the class dict has been processed, we can give them
+        #  the various _ep_* methods directory.  This is so that instances
+        #  of the typeclass will lookup these methods correctly.
+        def add_method(nm):
+            for supcls in cls.__mro__:
+                if "_ep_"+nm in supcls.__dict__:
+                    break
+            else:
+                setattr(cls,"_ep_"+nm,getattr(cls._ep_typedesc,nm+"_value"))
+        add_method("parse")
+        add_method("render")
+        add_method("default")
         return cls
-
-    def _ep_parse(cls,value,type,tag):
-        return cls._ep_typedesc.parse_value(value,type,tag)
-
-    def _ep_render(cls,value):
-        return cls._ep_typedesc.render_value(value)
-
-    def _ep_default(cls):
-        return cls._ep_typedesc.default_value()
 
     def _ep_make_typedesc(self):
         custom_attr_names = ("_ep_parse","_ep_render","_ep_collection",
@@ -390,7 +393,7 @@ class Assoc(Type):
     @classmethod
     def _ep_convert(cls,value):
         try:
-            return TypedDict(cls._types[0],cls._types[1])
+            return TypedDict(cls._types[0],cls._types[1],value)
         except TypeError:
             raise ValueError("not a valid Dict")
 
@@ -503,9 +506,9 @@ class Option(Type):
         return cls(*value)
 
     @classmethod
-    def _ep_parse(cls,type,tag,value):
+    def _ep_parse(cls,value,type,tag):
         if type != cls._ep_primtype:
-            raise UnexpectedWireTypeError
+            raise UnexpectedWireTypeError(type,cls._ep_primtype)
         if not cls._types:
             return cls
         else:
@@ -589,9 +592,9 @@ class _MessageMetaclass(_TypeMetaclass):
         for base in bases:
             if issubclass(base,Message):
                 for f in base._ep_fields:
-                    if t._ep_name not in names:
-                        bfields.append(t)
-                        names[t._ep_name] = True
+                    if f._ep_name not in names:
+                        bfields.append(f)
+                        names[f._ep_name] = True
         #  Merge fields and bfields into the final fields tuple.
         attrs["_ep_fields"] = tuple(f for f in bfields)
         attrs["_ep_fields"] = attrs["_ep_fields"]+tuple(f for (_,_,f) in fields)
@@ -859,7 +862,11 @@ class Union(Type):
             for opt in cls._types:
                 if opt._types:
                     items = [opt._types[0]._ep_parse(value,type,tag)]
-                    items.extend(t._ep_default() for t in opt._types[1:])
+                    try:
+                        items.extend(t._ep_default() for t in opt._types[1:])
+                    except UndefinedDefaultError:
+                        err = "could not promote primitive to Union type"
+                        raise ParseError(err)
                     return opt(*items)
             else:
                 err = "could not promote primitive to Union type"
@@ -868,7 +875,7 @@ class Union(Type):
 
     @classmethod
     def _ep_render(cls,value):
-        return value._ep_render(value)
+        return value._ep_typedesc.render_value(value)
 
    
 class Unbound(Type):
@@ -891,6 +898,10 @@ class Unbound(Type):
     def _ep_render(self,value):
         raise TypeError("parametric type not bound")
 
+    @classmethod
+    def _ep_default(self):
+        raise TypeError("parametric type not bound")
+
 
    
 class Placeholder(Type):
@@ -904,17 +915,17 @@ class Placeholder(Type):
     def __init__(self,name):
         self.name = name
 
-    @classmethod
     def _ep_parse(self,value,type,tag):
-        raise TypeError("parametric type not bound")
+        raise TypeError("placeholder type not bound")
 
-    @classmethod
     def _ep_collection(self):
-        raise TypeError("parametric type not bound")
+        raise TypeError("placeholder type not bound")
 
-    @classmethod
     def _ep_render(self,value):
-        raise TypeError("parametric type not bound")
+        raise TypeError("placeholder type not bound")
+
+    def _ep_default(self):
+        raise TypeError("placeholder type not bound " + str(self.name))
 
 
 def bind(ptype,*ctypes):
@@ -1069,6 +1080,9 @@ def resolve_placeholders(type):
             new_types.append(t2)
     new_types = tuple(new_types)
     if type._types != new_types:
+        class new_type(type):
+            _types = new_types
         type._types = new_types
- 
+        type._ep_typedesc = new_type._ep_typedesc
+
 
