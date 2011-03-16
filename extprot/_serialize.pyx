@@ -56,19 +56,13 @@ cdef enum TypeID:
 _S_BITS64_FLOAT = struct.Struct("<d")
 
 
-class _InfiniteTuple(object):
-    def __init__(self,item):
-        self.item
-    def __getitem__(self,i):
-        return self.item
-
 
 cdef class TypeDesc(object):
     """Object used to direct the serialization process.
 
-    Instances of TypeDesc are used to direct the serialization
-    process.  Each typeclass provides a TypeDesc object whose
-    method hooks are called at appropriate times during parsing or redering.
+    Instances of TypeDesc are used to direct the serialization process
+    Each typeclass provides a TypeDesc object whose method hooks are called
+    at appropriate times during parsing or redering.
 
     The base class provides no useful functionality, it just errors out.
     Subclasses provide behaviour specialised to the base extprot types,
@@ -462,8 +456,11 @@ cdef class Stream(object):
         if b < 128:
             return b
         lx = le = 0
-        #  Read as much as we can using C long longs
-        while lx < 144115188075855871LLU: # (2**(64-7)-1)
+        #  Read as much as we can using C long longs.
+        #  These constants are (2**(64-7)-1) and (64-7).
+        #  I haven't sat down and done the math to figure out whether
+        #  they could be higher; these are safe low-thought values.
+        while lx < 144115188075855871LLU and le < 57:
             if b < 128:
                 lh = b
                 lh = lh << le
@@ -474,21 +471,21 @@ cdef class Stream(object):
             lx += lh
             le += 7
             b = <unsigned short>self._read_char()
-        #  We're about to overflow lx, switch to a Python long
+        #  We're about to overflow lx, but le might be OK for a while.
         x = lx
-        while le < 9223372036854775808LLU: #(2**63)
+        while le < 57:
             if b < 128:
-                h = b
-                h = h << le
-                x += h
+                lh = b
+                lh = lh << le
+                x += lh
                 return x
-            h = b - 128
-            h = h << le
-            x += h
+            lh = b - 128
+            lh = lh << le
+            x += lh
             le += 7
             b = <unsigned short>self._read_char()
-        #  We're about to overflow le, switch to a Python long
         e = le
+        #  Now just carry on use just Python longs.
         while b >= 128:
             h = b - 128
             h = h << e

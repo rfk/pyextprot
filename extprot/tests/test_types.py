@@ -1,8 +1,11 @@
 
+import os
 from os import path
 import unittest
 import pickle
 import operator
+
+from nose import SkipTest
 
 import extprot
 from extprot import types
@@ -23,6 +26,10 @@ class OnOff(types.Message):
 
 class IDs(types.Message):
     map = types.Field(types.Assoc.build(types.Long,types.String))
+
+
+class BigNum(types.Message):
+    value = types.Field(types.Int)
 
 
 file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
@@ -88,5 +95,14 @@ class TestTypes(unittest.TestCase):
         self.assertEquals(ids2.map[1],"ONE")
         self.assertEquals(ids2.map[2],"TWO")
         self.assertRaises(KeyError,operator.getitem,ids2.map,3)
+
+    def test_big_integers(self):
+        if not hasattr(os,"urandom"):
+            raise SkipTest
+        for _ in xrange(100):
+            size = int(os.urandom(1).encode("hex"),16) or 1
+            v = int(os.urandom(size).encode("hex"),16)
+            self.assertEquals(v,BigNum.from_string(BigNum(v).to_string()).value)
+           
 
 
