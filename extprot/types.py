@@ -263,8 +263,9 @@ class Long(Type):
     @classmethod
     def _ep_convert(cls,value):
         packed = int(value)
-        if packed > self._ep_max_long:
+        if packed > cls._ep_max_long:
             raise ValueError("too big for a long: " + repr(packed))
+        return packed
 
 
 

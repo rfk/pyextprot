@@ -22,7 +22,7 @@ class OnOff(types.Message):
     is_on = types.Field(types.Bool)
 
 class IDs(types.Message):
-    map = types.Field(types.Assoc.build(types.Int,types.String))
+    map = types.Field(types.Assoc.build(types.Long,types.String))
 
 
 file = path.join(path.dirname(__file__),"../../examples/address_book.proto")
