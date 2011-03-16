@@ -122,7 +122,7 @@ cdef class SingleTypeDesc(TypeDesc):
     there is a single type and tag regardless of the value.
     """
 
-    cdef public TypeID type
+    cdef public int type
     cdef public long long tag
 
     cpdef parse_value(self,value,TypeID type,long long tag):
