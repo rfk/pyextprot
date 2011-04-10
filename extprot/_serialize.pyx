@@ -457,10 +457,10 @@ cdef class Stream(object):
             return b
         lx = le = 0
         #  Read as much as we can using C long longs.
-        #  These constants are (2**(64-7)-1) and (64-7).
+        #  These constants are (2**(64-8)-1) and (64-8).
         #  I haven't sat down and done the math to figure out whether
         #  they could be higher; these are safe low-thought values.
-        while lx < 144115188075855871LLU and le < 57:
+        while lx < 72057594037927935LLU and le < 56:
             if b < 128:
                 lh = b
                 lh = lh << le
@@ -485,7 +485,7 @@ cdef class Stream(object):
             le += 7
             b = <unsigned short>self._read_char()
         e = le
-        #  Now just carry on use just Python longs.
+        #  Now carry on using just Python longs.
         while b >= 128:
             h = b - 128
             h = h << e
