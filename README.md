@@ -1,6 +1,14 @@
 
+Status: Unmaintained
+====================
 
-  extprot:  compact, efficient, extensible binary serialization format
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
+
+I am [no longer actively maintaining this project](https://rfk.id.au/blog/entry/archiving-open-source-projects/).
+
+
+extprot:  compact, efficient, extensible binary serialization format
+====================================================================
 
 This is a python implementation of the 'extprot' serialization scheme, the
 details of which are described at:
